@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<title>BLE MIDI Keys</title>
+<style>
+  :root {
+    --bg: #111318; --panel: #1a1d24; --line: #2a2f3a; --text: #e8eaf0; --muted: #8b91a0;
+    --accent: #4fd1a5; --warn: #f0b429; --err: #ef5b5b;
+    --white: #f4f5f7; --black: #22252c; --hit: #4fd1a5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 12px; font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 14px; min-height: 44px; }
+  button.primary { background: var(--accent); color: #062b1f; border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: .45; }
+  .status { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--panel);
+    border: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: var(--accent); } .dot.busy { background: var(--warn); } .dot.err { background: var(--err); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  #kbd { position: relative; height: 140px; user-select: none; touch-action: none; }
+  .key { position: absolute; top: 0; border: 1px solid #0006; border-radius: 0 0 6px 6px; }
+  .key.w { background: var(--white); height: 100%; z-index: 1; }
+  .key.b { background: var(--black); height: 60%; z-index: 2; }
+  .key.down { background: var(--hit) !important; }
+  .key span { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 10px; color: #555; }
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .meter { font-size: 13px; } .meter b { font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; height: 160px; overflow-y: auto; color: var(--muted);
+    white-space: pre; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <h1>BLE MIDI Keys</h1>
+
+  <div class="row">
+    <button id="connect" class="primary">Connect keyboard</button>
+    <button id="disconnect" disabled>Disconnect</button>
+    <select id="wave" aria-label="Synth sound">
+      <option value="triangle">Triangle</option>
+      <option value="sine">Sine</option>
+      <option value="sawtooth">Saw</option>
+      <option value="square">Square</option>
+      <option value="off">Sound off</option>
+    </select>
+  </div>
+
+  <div class="status"><span id="dot" class="dot"></span><span id="status">Not connected</span></div>
+  <div id="unsupported" class="status hidden"><span class="dot err"></span>
+    <span>Web Bluetooth isn't available here. Use Chrome on Android, and load the page over HTTPS (or localhost).</span></div>
+
+  <div class="card">
+    <div class="label">Keyboard</div>
+    <div id="kbd"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">Controls</div>
+    <div class="meters">
+      <div class="meter">Last note <b id="mNote">–</b></div>
+      <div class="meter">Velocity <b id="mVel">–</b><div class="bar"><i id="bVel"></i></div></div>
+      <div class="meter">Pitch bend <b id="mPb">0</b><div class="bar"><i id="bPb" style="width:50%"></i></div></div>
+      <div class="meter">Mod (CC1) <b id="mMod">0</b><div class="bar"><i id="bMod"></i></div></div>
+      <div class="meter">Sustain <b id="mSus">off</b></div>
+      <div class="meter">Last CC <b id="mCc">–</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">MIDI log</div>
+    <div id="log"></div>
+  </div>
+
+  <p class="note">Turn the microKEY Air on in Bluetooth mode, tap Connect, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
+
+<script>
+// ---------- BLE MIDI constants ----------
+const MIDI_SERVICE = '03b80e5a-ede8-4b33-a751-6ce34ec4c700';
+const MIDI_CHAR    = '7772e5db-3868-4112-a1a9-f2669d106bf3';
+
+const $ = id => document.getElementById(id);
+let device = null, characteristic = null, userDisconnected = false;
+
+// ---------- Status / log ----------
+function setStatus(text, state) {
+  $('status').textContent = text;
+  $('dot').className = 'dot' + (state ? ' ' + state : '');
+}
+const logLines = [];
+function log(line) {
+  logLines.push(line);
+  if (logLines.length > 200) logLines.shift();
+  const el = $('log');
+  el.textContent = logLines.join('\n');
+  el.scrollTop = el.scrollHeight;
+}
+const hex = arr => Array.from(arr, b => b.toString(16).padStart(2, '0')).join(' ');
+
+// ---------- BLE MIDI packet parser ----------
+// Packet: [header][ts][status][data...]([ts][status][data...] | [data...] running status)*
+// header: bit7=1, bit6=0, bits5-0 = timestamp high. ts: bit7=1, bits6-0 = timestamp low.
+function dataLen(status) {
+  const hi = status & 0xf0;
+  if (hi === 0xc0 || hi === 0xd0) return 1;
+  if (hi < 0xf0) return 2;
+  if (status === 0xf1 || status === 0xf3) return 1;
+  if (status === 0xf2) return 2;
+  return 0;
+}
+let sysex = null;
+function parseBleMidi(bytes) {
+  if (bytes.length < 2 || !(bytes[0] & 0x80)) return;
+  let i = 1, running = 0;
+  while (i < bytes.length) {
+    let b = bytes[i];
+    // In-progress sysex continues with raw data bytes
+    if (sysex && !(b & 0x80)) { sysex.push(b); i++; continue; }
+    if (b & 0x80) {                    // timestamp byte
+      i++;
+      if (i >= bytes.length) break;
+      b = bytes[i];
+      if (b & 0x80) {                  // status byte
+        i++;
+        if (b === 0xf0) { sysex = [0xf0]; continue; }
+        if (b === 0xf7) { if (sysex) { sysex.push(0xf7); handleMidi(sysex); sysex = null; } continue; }
+        if (b >= 0xf8) { handleMidi([b]); continue; }   // realtime, keeps running status
+        running = b;
+      }
+    }
+    if (!running) { i++; continue; }
+    const n = dataLen(running);
+    if (i + n > bytes.length) break;
+    handleMidi([running, ...bytes.slice(i, i + n)]);
+    i += n;
+  }
+}
+
+// ---------- MIDI handling ----------
+const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const noteName = n => NAMES[n % 12] + (Math.floor(n / 12) - 1);
+let sustain = false;
+
+function handleMidi(msg) {
+  const [st, d1, d2] = msg;
+  const type = st & 0xf0, ch = (st & 0x0f) + 1;
+  if (type === 0x90 && d2 > 0) {
+    noteOn(d1, d2);
+    log(`ch${ch} note on  ${noteName(d1).padEnd(4)} vel ${d2}`);
+  } else if (type === 0x80 || (type === 0x90 && d2 === 0)) {
+    noteOff(d1);
+    log(`ch${ch} note off ${noteName(d1)}`);
+  } else if (type === 0xb0) {
+    $('mCc').textContent = `${d1} = ${d2}`;
+    if (d1 === 1) { $('mMod').textContent = d2; $('bMod').style.width = (d2 / 127 * 100) + '%'; synthMod(d2); }
+    if (d1 === 64) { sustain = d2 >= 64; $('mSus').textContent = sustain ? 'on' : 'off'; if (!sustain) releaseSustained(); }
+    if (d1 === 123 || d1 === 120) allOff();
+    log(`ch${ch} CC ${d1} = ${d2}`);
+  } else if (type === 0xe0) {
+    const v = ((d2 << 7) | d1) - 8192;
+    $('mPb').textContent = v;
+    $('bPb').style.width = ((v + 8192) / 16383 * 100) + '%';
+    synthBend(v);
+  } else if (type === 0xc0) {
+    log(`ch${ch} program ${d1}`);
+  } else if (st !== 0xf8 && st !== 0xfe) {
+    log('raw ' + hex(msg));
+  }
+}
+
+// ---------- On-screen keyboard (25 keys, follows octave shifts) ----------
+let baseNote = 48; // C3
+const KEYS = 25;
+const down = new Set();
+function buildKeyboard() {
+  const kbd = $('kbd');
+  kbd.innerHTML = '';
+  const whites = [];
+  for (let n = baseNote; n < baseNote + KEYS; n++) if (![1,3,6,8,10].includes(n % 12)) whites.push(n);
+  const w = 100 / whites.length;
+  let wi = 0;
+  for (let n = baseNote; n < baseNote + KEYS; n++) {
+    const black = [1,3,6,8,10].includes(n % 12);
+    const el = document.createElement('div');
+    el.className = 'key ' + (black ? 'b' : 'w') + (down.has(n) ? ' down' : '');
+    el.dataset.note = n;
+    if (black) { el.style.left = (wi * w - w * 0.3) + '%'; el.style.width = (w * 0.6) + '%'; }
+    else { el.style.left = (wi * w) + '%'; el.style.width = w + '%'; wi++;
+      if (n % 12 === 0) el.innerHTML = `<span>${noteName(n)}</span>`; }
+    kbd.appendChild(el);
+  }
+}
+function keyEl(n) { return $('kbd').querySelector(`[data-note="${n}"]`); }
+function ensureVisible(n) {
+  if (n < baseNote || n >= baseNote + KEYS) {
+    baseNote = Math.min(127 - KEYS + 1, n - (n % 12));
+    buildKeyboard();
+  }
+}
+// Touch / mouse play on the on-screen keys
+$('kbd').addEventListener('pointerdown', e => {
+  const n = +e.target.closest('.key')?.dataset.note;
+  if (isNaN(n)) return;
+  resumeAudio();
+  e.target.setPointerCapture?.(e.pointerId);
+  noteOn(n, 100);
+  const up = () => { noteOff(n); e.target.removeEventListener('pointerup', up); e.target.removeEventListener('pointercancel', up); };
+  e.target.addEventListener('pointerup', up);
+  e.target.addEventListener('pointercancel', up);
+});
+
+// ---------- Simple Web Audio synth ----------
+let ctx = null, master = null, lfo = null, lfoGain = null, bendCents = 0;
+const voices = new Map();      // note -> {osc, gain}
+const held = new Set();        // notes physically held
+function resumeAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = 0.25; master.connect(ctx.destination);
+    lfo = ctx.createOscillator(); lfo.frequency.value = 5.5;
+    lfoGain = ctx.createGain(); lfoGain.gain.value = 0;
+    lfo.connect(lfoGain); lfo.start();
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+}
+const freq = n => 440 * Math.pow(2, (n - 69) / 12);
+
+function noteOn(n, vel) {
+  held.add(n); down.add(n);
+  ensureVisible(n); keyEl(n)?.classList.add('down');
+  $('mNote').textContent = noteName(n);
+  $('mVel').textContent = vel; $('bVel').style.width = (vel / 127 * 100) + '%';
+  const wave = $('wave').value;
+  if (!ctx || wave === 'off') return;
+  stopVoice(n, 0.01);
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.type = wave;
+  osc.frequency.value = freq(n);
+  osc.detune.value = bendCents;
+  lfoGain.connect(osc.detune);
+  const t = ctx.currentTime, peak = (vel / 127) ** 1.5;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(peak, t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(Math.max(peak * 0.6, 0.0001), t + 0.4);
+  osc.connect(gain).connect(master);
+  osc.start(t);
+  voices.set(n, { osc, gain });
+}
+function noteOff(n) {
+  held.delete(n); down.delete(n);
+  keyEl(n)?.classList.remove('down');
+  if (!sustain) stopVoice(n, 0.25);
+}
+function stopVoice(n, rel) {
+  const v = voices.get(n);
+  if (!v) return;
+  const t = ctx.currentTime;
+  v.gain.gain.cancelScheduledValues(t);
+  v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+  v.gain.gain.exponentialRampToValueAtTime(0.0001, t + rel);
+  v.osc.stop(t + rel + 0.05);
+  voices.delete(n);
+}
+function releaseSustained() { for (const n of [...voices.keys()]) if (!held.has(n)) stopVoice(n, 0.25); }
+function allOff() { for (const n of [...voices.keys()]) stopVoice(n, 0.05); held.clear(); down.clear(); buildKeyboard(); }
+function synthBend(v) {
+  bendCents = v / 8192 * 200; // ±2 semitones
+  if (ctx) for (const { osc } of voices.values()) osc.detune.setTargetAtTime(bendCents, ctx.currentTime, 0.01);
+}
+function synthMod(v) { if (lfoGain) lfoGain.gain.setTargetAtTime(v / 127 * 40, ctx.currentTime, 0.02); }
+$('wave').addEventListener('change', () => { if ($('wave').value === 'off' && ctx) allOff(); });
+
+// ---------- Bluetooth connection ----------
+async function connect() {
+  resumeAudio();
+  try {
+    setStatus('Choose your keyboard…', 'busy');
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [MIDI_SERVICE] }] });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    userDisconnected = false;
+    await openGatt();
+  } catch (err) {
+    if (err.name === 'NotFoundError') setStatus('No device chosen', '');
+    else { setStatus('Error: ' + err.message, 'err'); console.error(err); }
+  }
+}
+async function openGatt() {
+  setStatus(`Connecting to ${device.name || 'device'}…`, 'busy');
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(MIDI_SERVICE);
+  characteristic = await service.getCharacteristic(MIDI_CHAR);
+  characteristic.addEventListener('characteristicvaluechanged', e => {
+    parseBleMidi(new Uint8Array(e.target.value.buffer));
+  });
+  await characteristic.startNotifications();
+  setStatus(`Connected: ${device.name || 'BLE MIDI device'}`, 'on');
+  $('connect').disabled = true; $('disconnect').disabled = false;
+  log(`connected to ${device.name}`);
+}
+async function onDisconnected() {
+  allOff();
+  $('connect').disabled = false; $('disconnect').disabled = true;
+  log('disconnected');
+  if (userDisconnected) { setStatus('Disconnected', ''); return; }
+  // Try to reconnect a few times (e.g. keyboard briefly out of range)
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    setStatus(`Connection lost, reconnecting (${attempt}/5)…`, 'busy');
+    await new Promise(r => setTimeout(r, 1000 * attempt));
+    try { await openGatt(); return; } catch (e) { /* retry */ }
+  }
+  setStatus('Connection lost. Tap Connect to try again.', 'err');
+}
+function disconnect() {
+  userDisconnected = true;
+  if (device?.gatt.connected) device.gatt.disconnect();
+}
+
+$('connect').addEventListener('click', connect);
+$('disconnect').addEventListener('click', disconnect);
+
+if (!navigator.bluetooth) {
+  $('unsupported').classList.remove('hidden');
+  $('connect').disabled = true;
+}
+buildKeyboard();
+</script>
+</body>
+</html>
