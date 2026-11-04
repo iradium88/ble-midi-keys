@@ -50,6 +50,7 @@
     <button id="connect" class="primary">Connect keyboard</button>
     <button id="disconnect" disabled>Disconnect</button>
     <select id="wave" aria-label="Synth sound">
+      <option value="piano" selected>Piano</option>
       <option value="triangle">Triangle</option>
       <option value="sine">Sine</option>
       <option value="sawtooth">Saw</option>
@@ -85,6 +86,7 @@
   </div>
 
   <p class="note">Turn the microKEY Air on in Bluetooth mode, tap Connect, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
+  <p class="note">Piano sound: <a href="https://archive.org/details/SalamanderGrandPianoV3" style="color:inherit">Salamander Grand Piano V3</a> by Alexander Holm, licensed <a href="https://creativecommons.org/licenses/by/3.0/" style="color:inherit">CC BY 3.0</a>. Samples served by the Tone.js project.</p>
 
 <script>
 // ---------- BLE MIDI constants ----------
@@ -234,17 +236,73 @@ function resumeAudio() {
     lfo.connect(lfoGain); lfo.start();
   }
   if (ctx.state === 'suspended') ctx.resume();
+  if ($('wave').value === 'piano') loadPiano();
 }
 const freq = n => 440 * Math.pow(2, (n - 69) / 12);
+
+// ---------- Sampled piano (Salamander Grand Piano, CC BY 3.0) ----------
+const PIANO_URL = 'https://tonejs.github.io/audio/salamander/';
+const piano = new Map();   // midi note -> AudioBuffer
+let pianoState = 'idle';   // idle | loading | ready | failed
+function pianoFiles() {
+  const list = [['A0', 21]];
+  const names = [['C', 0], ['Ds', 3], ['Fs', 6], ['A', 9]];
+  for (let oct = 1; oct <= 7; oct++) for (const [nm, off] of names) list.push([nm + oct, 12 * (oct + 1) + off]);
+  list.push(['C8', 108]);
+  return list;
+}
+async function loadPiano() {
+  if (pianoState !== 'idle' || !ctx) return;
+  pianoState = 'loading';
+  const files = pianoFiles();
+  let done = 0;
+  const label = $('wave').querySelector('[value="piano"]');
+  label.textContent = 'Piano (loading 0%)';
+  await Promise.all(files.map(async ([name, note]) => {
+    try {
+      const res = await fetch(PIANO_URL + name + '.mp3');
+      if (!res.ok) throw new Error(res.status);
+      piano.set(note, await ctx.decodeAudioData(await res.arrayBuffer()));
+    } catch (e) { console.warn('piano sample failed', name, e); }
+    label.textContent = `Piano (loading ${Math.round(++done / files.length * 100)}%)`;
+  }));
+  pianoState = piano.size ? 'ready' : 'failed';
+  label.textContent = piano.size ? 'Piano' : 'Piano (failed to load)';
+  log(piano.size ? `piano loaded (${piano.size} samples)` : 'piano samples failed to load; using triangle');
+}
+function nearestSample(n) {
+  let best = null, dist = 1e9;
+  for (const s of piano.keys()) { const d = Math.abs(s - n); if (d < dist) { dist = d; best = s; } }
+  return best;
+}
+function pianoVoice(n, vel) {
+  const s = nearestSample(n);
+  const src = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+  src.buffer = piano.get(s);
+  src.playbackRate.value = Math.pow(2, (n - s) / 12);
+  src.detune.value = bendCents;
+  lfoGain.connect(src.detune);
+  const v = vel / 127;
+  filter.type = 'lowpass';                       // softer notes sound darker, like a real piano
+  filter.frequency.value = 800 + v * v * 14000;
+  gain.gain.value = Math.pow(v, 1.6) * 2.2;
+  src.connect(filter).connect(gain).connect(master);
+  src.start();
+  return { osc: src, gain };
+}
 
 function noteOn(n, vel) {
   held.add(n); down.add(n);
   ensureVisible(n); keyEl(n)?.classList.add('down');
   $('mNote').textContent = noteName(n);
   $('mVel').textContent = vel; $('bVel').style.width = (vel / 127 * 100) + '%';
-  const wave = $('wave').value;
+  let wave = $('wave').value;
   if (!ctx || wave === 'off') return;
   stopVoice(n, 0.01);
+  if (wave === 'piano') {
+    if (pianoState === 'ready') { voices.set(n, pianoVoice(n, vel)); return; }
+    wave = 'triangle';                           // samples not ready yet: fall back
+  }
   const osc = ctx.createOscillator(), gain = ctx.createGain();
   osc.type = wave;
   osc.frequency.value = freq(n);
@@ -271,6 +329,7 @@ function stopVoice(n, rel) {
   v.gain.gain.setValueAtTime(v.gain.gain.value, t);
   v.gain.gain.exponentialRampToValueAtTime(0.0001, t + rel);
   v.osc.stop(t + rel + 0.05);
+  v.osc.onended = () => { try { lfoGain.disconnect(v.osc.detune); } catch (e) {} };
   voices.delete(n);
 }
 function releaseSustained() { for (const n of [...voices.keys()]) if (!held.has(n)) stopVoice(n, 0.25); }
@@ -280,7 +339,10 @@ function synthBend(v) {
   if (ctx) for (const { osc } of voices.values()) osc.detune.setTargetAtTime(bendCents, ctx.currentTime, 0.01);
 }
 function synthMod(v) { if (lfoGain) lfoGain.gain.setTargetAtTime(v / 127 * 40, ctx.currentTime, 0.02); }
-$('wave').addEventListener('change', () => { if ($('wave').value === 'off' && ctx) allOff(); });
+$('wave').addEventListener('change', () => {
+  if ($('wave').value === 'off' && ctx) allOff();
+  if ($('wave').value === 'piano') { resumeAudio(); }
+});
 
 // ---------- Bluetooth connection ----------
 async function connect() {
