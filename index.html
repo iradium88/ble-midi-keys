@@ -51,8 +51,9 @@
   <h1>BLE MIDI Keys</h1>
 
   <div class="row">
-    <button id="connect" class="primary">Connect keyboard</button>
+    <button id="connect" class="primary">Connect Bluetooth</button>
     <button id="disconnect" disabled>Disconnect</button>
+    <button id="usb">Connect USB</button>
     <select id="wave" aria-label="Synth sound">
       <option value="piano" selected>Piano</option>
       <option value="triangle">Triangle</option>
@@ -71,7 +72,8 @@
     <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume (ignore how hard keys are hit)</label>
   </div>
 
-  <div class="status"><span id="dot" class="dot"></span><span id="status">Not connected</span></div>
+  <div class="status"><span id="dot" class="dot"></span><span id="status">Bluetooth: not connected</span></div>
+  <div class="status"><span id="usbDot" class="dot"></span><span id="usbStatus">USB: not connected</span></div>
   <div id="unsupported" class="status hidden"><span class="dot err"></span>
     <span>Web Bluetooth isn't available here. Use Chrome on Android, and load the page over HTTPS (or localhost).</span></div>
 
@@ -97,7 +99,8 @@
     <div id="log"></div>
   </div>
 
-  <p class="note">Turn the microKEY Air on in Bluetooth mode, tap Connect, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
+  <p class="note">Bluetooth: turn the microKEY Air on in Bluetooth mode, tap Connect Bluetooth, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
+  <p class="note">USB: plug the keyboard in (on a phone, with a USB OTG adapter), tap Connect USB and allow MIDI access. After that the page picks up the keyboard by itself whenever it's plugged in.</p>
   <p class="note">Piano sound: <a href="https://archive.org/details/SalamanderGrandPianoV3" style="color:inherit">Salamander Grand Piano V3</a> by Alexander Holm, licensed <a href="https://creativecommons.org/licenses/by/3.0/" style="color:inherit">CC BY 3.0</a>. Samples served by the Tone.js project.</p>
 
 <script>
@@ -110,7 +113,7 @@ let device = null, characteristic = null, userDisconnected = false;
 
 // ---------- Status / log ----------
 function setStatus(text, state) {
-  $('status').textContent = text;
+  $('status').textContent = 'Bluetooth: ' + text;
   $('dot').className = 'dot' + (state ? ' ' + state : '');
 }
 const logLines = [];
@@ -432,6 +435,43 @@ function disconnect() {
   userDisconnected = true;
   if (device?.gatt.connected) device.gatt.disconnect();
 }
+
+// ---------- USB (Web MIDI) ----------
+let midiAccess = null;
+function setUsbStatus(text, state) {
+  $('usbStatus').textContent = 'USB: ' + text;
+  $('usbDot').className = 'dot' + (state ? ' ' + state : '');
+}
+function refreshUsbInputs() {
+  const names = [];
+  for (const input of midiAccess.inputs.values()) {
+    if (input.state !== 'connected') continue;
+    input.onmidimessage = e => handleMidi(Array.from(e.data));
+    names.push(input.name);
+  }
+  if (names.length) setUsbStatus('connected: ' + names.join(', '), 'on');
+  else setUsbStatus('no MIDI keyboard plugged in. Plug it in and it will connect by itself.', 'busy');
+  $('usb').disabled = names.length > 0;
+}
+async function connectUsb() {
+  resumeAudio();
+  if (!navigator.requestMIDIAccess) { setUsbStatus("this browser doesn't support Web MIDI. Use Chrome or Edge.", 'err'); return; }
+  try {
+    midiAccess = midiAccess || await navigator.requestMIDIAccess();
+    midiAccess.onstatechange = e => {
+      if (e.port.type !== 'input') return;
+      log(`USB ${e.port.name}: ${e.port.state}`);
+      if (e.port.state === 'disconnected') allOff();
+      refreshUsbInputs();
+    };
+    refreshUsbInputs();
+  } catch (err) {
+    setUsbStatus('MIDI access was blocked: ' + err.message, 'err');
+  }
+}
+$('usb').addEventListener('click', connectUsb);
+// If MIDI access was already allowed on an earlier visit, connect USB without a click
+navigator.permissions?.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectUsb(); }).catch(() => {});
 
 $('connect').addEventListener('click', connect);
 $('disconnect').addEventListener('click', disconnect);
