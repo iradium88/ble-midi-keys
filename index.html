@@ -242,7 +242,12 @@ const held = new Set();        // notes physically held
 function resumeAudio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = masterLevel(); master.connect(ctx.destination);
+    // Limiter after the master gain lets the volume go loud without chords clipping
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6; limiter.knee.value = 6; limiter.ratio.value = 20;
+    limiter.attack.value = 0.002; limiter.release.value = 0.2;
+    limiter.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = masterLevel(); master.connect(limiter);
     lfo = ctx.createOscillator(); lfo.frequency.value = 5.5;
     lfoGain = ctx.createGain(); lfoGain.gain.value = 0;
     lfo.connect(lfoGain); lfo.start();
@@ -255,6 +260,15 @@ const freq = n => 440 * Math.pow(2, (n - 69) / 12);
 // ---------- Sampled piano (Salamander Grand Piano, CC BY 3.0) ----------
 const PIANO_URL = 'https://tonejs.github.io/audio/salamander/';
 const piano = new Map();   // midi note -> AudioBuffer
+const pianoPeak = new Map(); // midi note -> peak level, used to normalize (raw samples peak ~0.2)
+function bufferPeak(buf) {
+  let m = 0;
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < d.length; i += 4) { const a = Math.abs(d[i]); if (a > m) m = a; }
+  }
+  return m || 1;
+}
 let pianoState = 'idle';   // idle | loading | ready | failed
 function pianoFiles() {
   const list = [['A0', 21]];
@@ -274,7 +288,9 @@ async function loadPiano() {
     try {
       const res = await fetch(PIANO_URL + name + '.mp3');
       if (!res.ok) throw new Error(res.status);
-      piano.set(note, await ctx.decodeAudioData(await res.arrayBuffer()));
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      piano.set(note, buf);
+      pianoPeak.set(note, bufferPeak(buf));
     } catch (e) { console.warn('piano sample failed', name, e); }
     label.textContent = `Piano (loading ${Math.round(++done / files.length * 100)}%)`;
   }));
@@ -297,7 +313,7 @@ function pianoVoice(n, vel) {
   const v = vel / 127;
   filter.type = 'lowpass';                       // softer notes sound darker, like a real piano
   filter.frequency.value = 800 + v * v * 14000;
-  gain.gain.value = Math.pow(v, 1.6) * 2.2;
+  gain.gain.value = Math.pow(v, 1.3) * 0.9 / pianoPeak.get(s);
   src.connect(filter).connect(gain).connect(master);
   src.start();
   return { osc: src, gain };
@@ -354,7 +370,7 @@ function synthBend(v) {
 function synthMod(v) { if (lfoGain) lfoGain.gain.setTargetAtTime(v / 127 * 40, ctx.currentTime, 0.02); }
 // ---------- Volume + fixed velocity (remembered per browser) ----------
 const FIXED_VELOCITY = 100;
-function masterLevel() { const v = $('vol').value / 100; return 0.5 * v * v; } // squared = feels linear to the ear
+function masterLevel() { const v = $('vol').value / 100; return 1.6 * v * v; } // squared = feels linear to the ear
 function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 if (recall('vol') !== null) $('vol').value = recall('vol');
