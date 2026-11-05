@@ -41,6 +41,10 @@
     white-space: pre; }
   .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
   .hidden { display: none; }
+  .ctl { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--text); }
+  .ctl input[type=range] { width: 160px; accent-color: var(--accent); }
+  .ctl input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+  .ctl b { font-variant-numeric: tabular-nums; min-width: 2.5ch; }
 </style>
 </head>
 <body>
@@ -57,6 +61,14 @@
       <option value="square">Square</option>
       <option value="off">Sound off</option>
     </select>
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <label class="ctl">Volume
+      <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
+      <b id="volVal">70</b>
+    </label>
+    <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume (ignore how hard keys are hit)</label>
   </div>
 
   <div class="status"><span id="dot" class="dot"></span><span id="status">Not connected</span></div>
@@ -230,7 +242,7 @@ const held = new Set();        // notes physically held
 function resumeAudio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = 0.25; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = masterLevel(); master.connect(ctx.destination);
     lfo = ctx.createOscillator(); lfo.frequency.value = 5.5;
     lfoGain = ctx.createGain(); lfoGain.gain.value = 0;
     lfo.connect(lfoGain); lfo.start();
@@ -298,6 +310,7 @@ function noteOn(n, vel) {
   $('mVel').textContent = vel; $('bVel').style.width = (vel / 127 * 100) + '%';
   let wave = $('wave').value;
   if (!ctx || wave === 'off') return;
+  if ($('fixedVel').checked) vel = FIXED_VELOCITY;
   stopVoice(n, 0.01);
   if (wave === 'piano') {
     if (pianoState === 'ready') { voices.set(n, pianoVoice(n, vel)); return; }
@@ -339,6 +352,21 @@ function synthBend(v) {
   if (ctx) for (const { osc } of voices.values()) osc.detune.setTargetAtTime(bendCents, ctx.currentTime, 0.01);
 }
 function synthMod(v) { if (lfoGain) lfoGain.gain.setTargetAtTime(v / 127 * 40, ctx.currentTime, 0.02); }
+// ---------- Volume + fixed velocity (remembered per browser) ----------
+const FIXED_VELOCITY = 100;
+function masterLevel() { const v = $('vol').value / 100; return 0.5 * v * v; } // squared = feels linear to the ear
+function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+if (recall('vol') !== null) $('vol').value = recall('vol');
+$('fixedVel').checked = recall('fixedVel') === '1';
+$('volVal').textContent = $('vol').value;
+$('vol').addEventListener('input', () => {
+  $('volVal').textContent = $('vol').value;
+  store('vol', $('vol').value);
+  if (master) master.gain.setTargetAtTime(masterLevel(), ctx.currentTime, 0.02);
+});
+$('fixedVel').addEventListener('change', () => store('fixedVel', $('fixedVel').checked ? '1' : '0'));
+
 $('wave').addEventListener('change', () => {
   if ($('wave').value === 'off' && ctx) allOff();
   if ($('wave').value === 'piano') { resumeAudio(); }
