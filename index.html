@@ -3,113 +3,267 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#111318">
-<title>BLE MIDI Keys</title>
+<meta name="theme-color" content="#0e1015">
+<title>MIDI Keys</title>
 <style>
   :root {
-    --bg: #111318; --panel: #1a1d24; --line: #2a2f3a; --text: #e8eaf0; --muted: #8b91a0;
-    --accent: #4fd1a5; --warn: #f0b429; --err: #ef5b5b;
-    --white: #f4f5f7; --black: #22252c; --hit: #4fd1a5;
+    --bg: #0e1015; --panel: #171a21; --panel2: #1d2129; --line: #2a2f3a; --text: #e8eaf0; --muted: #8b91a0;
+    --accent: #4fd1a5; --warn: #f0b429; --err: #ef5b5b; --felt: #8a1c2b;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  body { padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); max-width: 900px; margin: 0 auto; }
-  h1 { font-size: 18px; margin: 0 0 12px; font-weight: 600; }
+  body { padding: 12px 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: .01em; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
-    border-radius: 10px; padding: 10px 14px; min-height: 44px; }
+  .row.head { justify-content: space-between; margin-bottom: 8px; }
+  button, select { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+  button:hover:not(:disabled), select:hover { border-color: #3a4150; }
+  button.sm, select.sm { padding: 6px 11px; min-height: 34px; font-size: 14px; }
   button.primary { background: var(--accent); color: #062b1f; border-color: transparent; font-weight: 600; }
-  button:disabled { opacity: .45; }
-  .status { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--panel);
-    border: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
-  .dot.on { background: var(--accent); } .dot.busy { background: var(--warn); } .dot.err { background: var(--err); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; }
-  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-  #kbd { position: relative; height: 140px; user-select: none; touch-action: none; }
-  .key { position: absolute; top: 0; border: 1px solid #0006; border-radius: 0 0 6px 6px; }
-  .key.w { background: var(--white); height: 100%; z-index: 1; }
-  .key.b { background: var(--black); height: 60%; z-index: 2; }
-  .key.down { background: var(--hit) !important; }
-  .key span { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 10px; color: #555; }
-  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-  .meter { font-size: 13px; } .meter b { font-variant-numeric: tabular-nums; }
-  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
-  .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
-  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; height: 160px; overflow-y: auto; color: var(--muted);
-    white-space: pre; }
-  .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
-  .hidden { display: none; }
-  .ctl { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--text); }
-  .ctl input[type=range] { width: 160px; accent-color: var(--accent); }
-  .ctl input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.warn { background: var(--warn); color: #2b1d00; border-color: transparent; font-weight: 600; align-self: center; }
+  button.warn.flash { animation: flash .5s 2; }
+  @keyframes flash { 50% { transform: scale(1.08); } }
+  #disconnect:disabled { display: none; }          /* only shown while a Bluetooth keyboard is connected */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .hint { text-transform: none; letter-spacing: 0; margin-left: 6px; color: #6b7180; }
+  .hidden { display: none !important; }
+
+  /* Top bar: title + connection, kept small */
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .conn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+    padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; max-width: 100%; }
+  .chip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top .chip { cursor: pointer; }
+  .top.connected:not(.show-all) #connect, .top.connected:not(.show-all) #usb,
+  .top.connected:not(.show-all) .chip.off { display: none; }
+  .top.connected .chip:not(.off) { color: var(--text); border-color: #2fa67f; background: #13261f; font-size: 13px; padding: 5px 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); } .dot.busy { background: var(--warn); } .dot.err { background: var(--err); }
+
+  /* The keyboard: the main thing on the page */
+  .stage { padding: 14px 14px 12px; background: linear-gradient(#1b1e26, #13151b); }
+  .stage-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .now { display: flex; align-items: baseline; gap: 10px; }
+  .now b { font-size: 34px; line-height: 1; font-weight: 700; min-width: 2.2ch; font-variant-numeric: tabular-nums; }
+  .now span { color: var(--muted); font-size: 13px; }
+  .now { flex-wrap: wrap; min-width: 0; }
+  .now b { font-size: 30px; white-space: nowrap; }
+  .now b.idle { color: #5f6574; }
+  .now span.chord { color: var(--accent); font-size: 22px; font-weight: 700; }
+  .now span.chord:empty { display: none; }
+  .felt { height: 6px; background: var(--felt); border-radius: 3px 3px 0 0; box-shadow: inset 0 -2px 3px #0006; }
+  #kbd { position: relative; height: clamp(170px, 30vw, 280px); user-select: none; touch-action: none;
+    background: #0b0c10; border-radius: 0 0 8px 8px; }
+  .key { position: absolute; top: 0; border-radius: 0 0 7px 7px; cursor: pointer; transition: background .06s, box-shadow .06s; }
+  .key.w { height: 100%; z-index: 1; background: linear-gradient(#f2f3f6, #fdfdfe 70%, #e4e6eb);
+    border: 1px solid #b9bcc4; box-shadow: inset 0 -6px 0 #d4d7de; }
+  .key.b { height: 62%; z-index: 2; background: linear-gradient(#3a3f4b, #16181e 85%, #0c0d11);
+    border: 1px solid #000; box-shadow: inset 0 -5px 0 #2a2e38, 0 3px 4px #0008; }
+  /* Pressed keys: soft = pale green, hard = deep, glowing green (--v = velocity 0..1) */
+  .key.w.down { background: hsl(158 60% calc(90% - var(--v, .7) * 42%));
+    box-shadow: inset 0 -2px 0 #2fa67f, 0 0 calc(6px + var(--v, .7) * 22px) #4fd1a599; }
+  .key.b.down { background: hsl(158 62% calc(72% - var(--v, .7) * 40%));
+    box-shadow: inset 0 -2px 0 #1d7a5c, 0 0 calc(4px + var(--v, .7) * 18px) #4fd1a599; }
+  .key span { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; color: #3d424d; font-weight: 500;
+    pointer-events: none; white-space: nowrap; overflow: hidden; }
+  .key span.c { color: #111; font-weight: 700; }
+  .key.b span { bottom: 8px; font-size: 10px; color: #c9ced8; letter-spacing: -.02em; }
+  /* Label stays readable: dark on pale (soft) keys, near-white on deep green (hard) keys */
+  .key.down span { color: hsl(158 40% clamp(14%, (var(--v, .7) - .58) * 2000%, 96%)); }
+  .sound { margin-top: 12px; }
+  /* Match keyboard prompt, shown over the keys */
+  .kbd-wrap { position: relative; }
+  .match-overlay { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 6px; padding: 12px 70px; text-align: center; border-radius: 3px 3px 8px 8px;
+    background: rgba(9, 11, 15, .82); backdrop-filter: blur(2px); }
+  .match-title { font-size: clamp(17px, 2.6vw, 26px); font-weight: 800; color: #fff; }
+  .match-step { color: var(--muted); font-size: 13px; }
+  .match-err { color: var(--err); font-size: 14px; min-height: 1.2em; }
+  .match-arrow { position: absolute; top: 50%; margin-top: -32px; font-size: 52px; line-height: 64px; color: var(--warn); }
+  .match-overlay[data-step="1"] .match-arrow { left: 14px; animation: nudgeL 1s ease-in-out infinite; }
+  .match-overlay[data-step="2"] .match-arrow { right: 14px; animation: nudgeR 1s ease-in-out infinite; }
+  .match-overlay[data-step="3"] { cursor: pointer; background: rgba(9, 11, 15, .88); }
+  .match-overlay[data-step="3"] .match-title { color: var(--warn); font-size: clamp(20px, 3.2vw, 32px); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.05); } }
+  @keyframes nudgeL { 50% { transform: translateX(-8px); } }
+  @keyframes nudgeR { 50% { transform: translateX(8px); } }
+  @media (max-width: 560px) { .match-overlay { padding: 10px 44px; } .match-arrow { font-size: 36px; } }
+  .ctl { display: flex; align-items: center; gap: 8px; min-height: 34px; color: var(--text); font-size: 14px; }
+  .ctl input[type=range] { width: 140px; accent-color: var(--accent); }
+  .ctl input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   .ctl b { font-variant-numeric: tabular-nums; min-width: 2.5ch; }
+
+  /* Metronome block */
+  /* Metronome: everything on one line (wraps only on narrow phones) */
+  .card.metro { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 14px; }
+  button.big { font-weight: 700; min-width: 84px; }
+  button.big.on { background: var(--warn); color: #2b1d00; border-color: transparent; }
+  .tempo { display: flex; align-items: center; gap: 4px; }
+  .tempo button { width: 34px; padding: 0; font-size: 18px; }
+  #bpm { width: 62px; font: 700 20px/1 system-ui, sans-serif; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 4px; height: 34px; text-align: center; }
+  .unit { color: var(--muted); font-size: 12px; margin-left: 2px; }
+  #metroVol { width: 90px; accent-color: var(--accent); }
+  .beats { display: flex; gap: 6px; flex: 1; min-width: 120px; }
+  .beats i { flex: 1; max-width: 44px; height: 30px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line);
+    display: grid; place-items: center; font: 700 14px system-ui, sans-serif; font-style: normal; color: var(--muted);
+    transition: background .05s, color .05s; }
+  .beats i.first { color: var(--warn); }
+  .beats i.on { color: #062b1f; } .beats i.on.first { color: #2b1d00; }
+  .beats.single { flex: 0; min-width: 0; }
+  .beats.single i { width: 30px; flex: none; border-radius: 50%; }
+  .beats i.on { background: var(--accent); box-shadow: 0 0 10px #4fd1a5aa; } .beats i.on.first { background: var(--warn); box-shadow: 0 0 10px #f0b429aa; }
+
+  /* Song / played boxes */
+  .notes { display: block; width: 100%; font: 15px/1.6 ui-monospace, Consolas, monospace; min-height: 90px; height: 130px;
+    resize: vertical; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 4; }
+  /* Never wrap: R:/L: rows must stay lined up, so long lines scroll sideways instead */
+  #song { height: 200px; }
+  .notes::placeholder { color: #5f6574; }
+  #songMsg { color: var(--muted); font-size: 13px; margin-top: 6px; min-height: 1.2em; }
+
+  /* Small, folded-away sections */
+  details.small { padding: 8px 14px; }
+  details.small summary { cursor: pointer; margin: 0; list-style-position: inside; }
+  details.small summary b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+  .meter { font-size: 12px; color: var(--muted); }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+  #log { font: 11px/1.45 ui-monospace, Consolas, monospace; height: 90px; overflow-y: auto; color: var(--muted);
+    white-space: pre; background: var(--bg); border-radius: 8px; padding: 6px 8px; }
+  .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  @media (max-width: 560px) {
+    body { padding: 10px; }
+    .conn { margin-left: 0; }
+    .now b { font-size: 28px; }
+    .key span { font-size: 9px; bottom: 6px; } .key.b span { display: none; }
+  }
 </style>
 </head>
 <body>
-  <h1>BLE MIDI Keys</h1>
+  <header class="top">
+    <h1>MIDI Keys</h1>
+    <div class="conn">
+      <button id="connect" class="primary sm">Bluetooth</button>
+      <button id="disconnect" class="sm" disabled>Disconnect</button>
+      <button id="usb" class="sm">USB</button>
+      <span class="chip" id="btChip" title="Bluetooth status (click to show connect buttons)"><span id="dot" class="dot"></span><span id="status">Bluetooth: not connected</span></span>
+      <span class="chip" id="usbChip" title="USB status (click to show connect buttons)"><span id="usbDot" class="dot"></span><span id="usbStatus">USB: not connected</span></span>
+    </div>
+    <div id="unsupported" class="chip hidden"><span class="dot err"></span>
+      <span>No Web Bluetooth here: use Chrome on Android over HTTPS (or localhost), or connect by USB.</span></div>
+  </header>
 
-  <div class="row">
-    <button id="connect" class="primary">Connect Bluetooth</button>
-    <button id="disconnect" disabled>Disconnect</button>
-    <button id="usb">Connect USB</button>
-    <select id="wave" aria-label="Synth sound">
-      <option value="piano" selected>Piano</option>
-      <option value="triangle">Triangle</option>
-      <option value="sine">Sine</option>
-      <option value="sawtooth">Saw</option>
-      <option value="square">Square</option>
-      <option value="off">Sound off</option>
-    </select>
-  </div>
-
-  <div class="row" style="margin-top:8px">
-    <label class="ctl">Volume
-      <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
-      <b id="volVal">70</b>
-    </label>
-    <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume (ignore how hard keys are hit)</label>
-  </div>
-
-  <div class="status"><span id="dot" class="dot"></span><span id="status">Bluetooth: not connected</span></div>
-  <div class="status"><span id="usbDot" class="dot"></span><span id="usbStatus">USB: not connected</span></div>
-  <div id="unsupported" class="status hidden"><span class="dot err"></span>
-    <span>Web Bluetooth isn't available here. Use Chrome on Android, and load the page over HTTPS (or localhost).</span></div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between;margin-bottom:8px">
-      <div class="label" style="margin:0">Keyboard <span id="range"></span></div>
+  <section class="card stage">
+    <div class="stage-top">
+      <div class="now"><b id="mNote" class="idle">–</b><span id="chord" class="chord"></span><span id="range"></span>
+        <button id="soundOn" class="sm warn hidden" title="Browsers only allow sound after one click or tap on the page">🔇 Click to turn on sound</button></div>
       <div class="row">
-        <button id="match" aria-label="Match the on-screen keyboard to your keyboard">Match keyboard</button>
-        <button id="octDown" aria-label="Show one octave lower">◀ Octave</button>
-        <button id="octUp" aria-label="Show one octave higher">Octave ▶</button>
+        <button id="match" class="sm" aria-label="Match the on-screen keyboard to your keyboard">Match keyboard</button>
+        <button id="octDown" class="sm" aria-label="Show one octave lower">◀ Oct</button>
+        <button id="octUp" class="sm" aria-label="Show one octave higher">Oct ▶</button>
       </div>
     </div>
-    <div id="kbd"></div>
-  </div>
-
-  <div class="card">
-    <div class="label">Controls</div>
-    <div class="meters">
-      <div class="meter">Last note <b id="mNote">–</b></div>
-      <div class="meter">Velocity <b id="mVel">–</b><div class="bar"><i id="bVel"></i></div></div>
-      <div class="meter">Pitch bend <b id="mPb">0</b><div class="bar"><i id="bPb" style="width:50%"></i></div></div>
-      <div class="meter">Mod (CC1) <b id="mMod">0</b><div class="bar"><i id="bMod"></i></div></div>
-      <div class="meter">Sustain <b id="mSus">off</b></div>
-      <div class="meter">Last CC <b id="mCc">–</b></div>
+    <div class="kbd-wrap">
+      <div class="felt"></div>
+      <div id="kbd"></div>
+      <div id="matchOverlay" class="match-overlay hidden" data-step="1">
+        <div id="matchArrow" class="match-arrow" aria-hidden="true">◀</div>
+        <div id="matchStep" class="match-step">Step 1 of 2</div>
+        <div id="matchTitle" class="match-title">Press the LEFT-most key on your keyboard</div>
+        <div id="matchSub" class="match-step">so the screen shows exactly your keys</div>
+        <div id="matchErr" class="match-err"></div>
+        <button id="matchSkip" class="sm">Skip, use last time's range</button>
+      </div>
     </div>
-  </div>
+    <div class="row sound">
+      <select id="wave" class="sm" aria-label="Synth sound">
+        <option value="piano" selected>Piano</option>
+        <option value="triangle">Triangle</option>
+        <option value="sine">Sine</option>
+        <option value="sawtooth">Saw</option>
+        <option value="square">Square</option>
+        <option value="off">Sound off</option>
+      </select>
+      <label class="ctl">Volume
+        <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
+        <b id="volVal">70</b>
+      </label>
+      <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume</label>
+    </div>
+  </section>
 
-  <div class="card">
-    <div class="label">MIDI log</div>
+  <section class="card metro">
+    <span class="label" style="margin:0">Metronome</span>
+    <button id="metro" class="big sm" aria-label="Start or stop the metronome">▶ Start</button>
+    <div class="tempo">
+      <button id="bpmDown" class="sm" aria-label="Slower">−</button>
+      <input id="bpm" type="number" min="30" max="240" value="80" aria-label="Tempo in beats per minute">
+      <button id="bpmUp" class="sm" aria-label="Faster">+</button>
+      <span class="unit">BPM</span>
+    </div>
+    <button id="tap" class="sm" aria-label="Tap the tempo">Tap</button>
+    <select id="beatsPerBar" class="sm" aria-label="Beats per bar">
+      <option value="2">2/4</option><option value="3">3/4</option>
+      <option value="4" selected>4/4</option><option value="6">6/8</option><option value="1">no accent</option>
+    </select>
+    <input id="metroVol" type="range" min="0" max="100" value="60" aria-label="Metronome click volume" title="Click volume">
+    <div class="beats" id="beatDots" aria-hidden="true"></div>
+  </section>
+
+  <section class="card">
+    <div class="row head">
+      <div class="label" style="margin:0">Song <span class="hint">paste notes here and press Play</span></div>
+      <div class="row">
+        <button id="playStream" class="primary sm">▶ Play</button>
+        <select id="speed" class="sm" aria-label="Playback speed">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option><option value="1.5">1.5×</option>
+        </select>
+        <button id="clearSong" class="sm">Clear</button>
+      </div>
+    </div>
+    <textarea id="song" class="notes" wrap="off" spellcheck="false" aria-label="Song to play"
+      placeholder="Paste notes here, like:  A4 C5 A4  G4   A3+E4&#10;Spaces = pauses, A3+E4 = together, R:/L: rows = right and left hand, pp…ff = loudness, Ped / * = pedal"></textarea>
+    <div id="songMsg"></div>
+  </section>
+
+  <section class="card">
+    <div class="row head">
+      <div class="label" style="margin:0">What you played <span class="hint">written as you play</span></div>
+      <div class="row">
+        <button id="toSong" class="sm" title="Put what you played into the Song box, so you can play it back">→ Song</button>
+        <button id="copyStream" class="sm">Copy</button>
+        <button id="clearStream" class="sm">Clear</button>
+      </div>
+    </div>
+    <textarea id="stream" class="notes" wrap="off" spellcheck="false" aria-label="What you played"
+      placeholder="Play your keyboard and the notes show up here"></textarea>
+  </section>
+
+  <details class="card small">
+    <summary class="label">MIDI log <span class="hint">velocity <b id="mVel">–</b> · sustain <b id="mSus">off</b> · bend <b id="mPb">0</b> · mod <b id="mMod">0</b> · CC <b id="mCc">–</b></span></summary>
+    <div class="meters">
+      <div class="meter">Velocity<div class="bar"><i id="bVel"></i></div></div>
+      <div class="meter">Pitch bend<div class="bar"><i id="bPb" style="width:50%"></i></div></div>
+      <div class="meter">Mod (CC1)<div class="bar"><i id="bMod"></i></div></div>
+    </div>
     <div id="log"></div>
-  </div>
+  </details>
 
-  <p class="note">Bluetooth: turn the microKEY Air on in Bluetooth mode, tap Connect Bluetooth, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
-  <p class="note">USB: plug the keyboard in (on a phone, with a USB OTG adapter), tap Connect USB and allow MIDI access. After that the page picks up the keyboard by itself whenever it's plugged in.</p>
-  <p class="note">Piano sound: <a href="https://archive.org/details/SalamanderGrandPianoV3" style="color:inherit">Salamander Grand Piano V3</a> by Alexander Holm, licensed <a href="https://creativecommons.org/licenses/by/3.0/" style="color:inherit">CC BY 3.0</a>. Samples served by the Tone.js project.</p>
-
+  <details class="card small">
+    <summary class="label">Help &amp; credits</summary>
+    <p class="note">Bluetooth: turn the microKEY Air on in Bluetooth mode, tap Bluetooth, and pick it from the list. Don't pair it in Android's Bluetooth settings first; Chrome connects to it directly.</p>
+    <p class="note">USB: plug the keyboard in (on a phone, with a USB OTG adapter), tap USB and allow MIDI access. After that the page picks up the keyboard by itself whenever it's plugged in.</p>
+    <p class="note">Piano sound: <a href="https://archive.org/details/SalamanderGrandPianoV3" style="color:inherit">Salamander Grand Piano V3</a> by Alexander Holm, licensed <a href="https://creativecommons.org/licenses/by/3.0/" style="color:inherit">CC BY 3.0</a>. Samples served by the <a href="https://github.com/tambien/Piano" style="color:inherit">Tone.js Piano</a> project.</p>
+  </details>
 <script>
 // ---------- BLE MIDI constants ----------
 const MIDI_SERVICE = '03b80e5a-ede8-4b33-a751-6ce34ec4c700';
@@ -118,10 +272,24 @@ const MIDI_CHAR    = '7772e5db-3868-4112-a1a9-f2669d106bf3';
 const $ = id => document.getElementById(id);
 let device = null, characteristic = null, userDisconnected = false;
 
+// ---------- Connection bar ----------
+// While a keyboard is connected, the bar shrinks to just that connection's green pill.
+// Clicking the pill shows the connect buttons again (to switch or reconnect).
+function updateConnBar() {
+  const bt = $('dot').classList.contains('on'), usb = $('usbDot').classList.contains('on');
+  const top = document.querySelector('.top');
+  top.classList.toggle('connected', bt || usb);
+  $('btChip').classList.toggle('off', !bt);
+  $('usbChip').classList.toggle('off', !usb);
+}
+document.querySelectorAll('.top .chip').forEach(c => c.addEventListener('click', () =>
+  document.querySelector('.top').classList.toggle('show-all')));
+
 // ---------- Status / log ----------
 function setStatus(text, state) {
   $('status').textContent = 'Bluetooth: ' + text;
   $('dot').className = 'dot' + (state ? ' ' + state : '');
+  updateConnBar();
 }
 const logLines = [];
 function log(line) {
@@ -181,8 +349,11 @@ function handleMidi(msg) {
   const [st, d1, d2] = msg;
   const type = st & 0xf0, ch = (st & 0x0f) + 1;
   if (type === 0x90 && d2 > 0) {
-    if (matching) finishMatch(d1);
+    const wasMatching = matchStep > 0;
+    if (wasMatching) matchKey(d1);
+    quietStream = wasMatching;                     // match presses aren't written to "What you played"
     noteOn(d1, d2);
+    quietStream = false;
     log(`ch${ch} note on  ${noteName(d1).padEnd(4)} vel ${d2}`);
   } else if (type === 0x80 || (type === 0x90 && d2 === 0)) {
     noteOff(d1);
@@ -190,7 +361,7 @@ function handleMidi(msg) {
   } else if (type === 0xb0) {
     $('mCc').textContent = `${d1} = ${d2}`;
     if (d1 === 1) { $('mMod').textContent = d2; $('bMod').style.width = (d2 / 127 * 100) + '%'; synthMod(d2); }
-    if (d1 === 64) { sustain = d2 >= 64; $('mSus').textContent = sustain ? 'on' : 'off'; if (!sustain) releaseSustained(); }
+    if (d1 === 64) { sustain = d2 >= 64; $('mSus').textContent = sustain ? 'on' : 'off'; if (!sustain && !playPedal) releaseSustained(); }
     if (d1 === 123 || d1 === 120) allOff();
     log(`ch${ch} CC ${d1} = ${d2}`);
   } else if (type === 0xe0) {
@@ -205,15 +376,25 @@ function handleMidi(msg) {
   }
 }
 
-// ---------- On-screen keyboard (25 keys, follows octave shifts) ----------
-const KEYS = 25;
+// ---------- On-screen keyboard (shows exactly the keys of the real keyboard) ----------
+let KEYS = 25;                       // how many keys; set by Match from the real keyboard
 const down = new Set();
-// Lowest key shown. Remembered per browser so it matches the keyboard's octave setting.
-let baseNote = 48; // C3
-function setBase(n) {
+let baseNote = 48; // C3              // lowest key shown; both are remembered per browser
+const isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+function saveRange() { store('baseNote', baseNote); store('keys', KEYS); }
+function setBase(n) {                // auto-follow: jump so the range starts on a C
   baseNote = Math.max(0, Math.min(127 - KEYS + 1, n - (n % 12)));
-  try { localStorage.setItem('baseNote', baseNote); } catch (e) {}
-  buildKeyboard();
+  saveRange(); buildKeyboard();
+}
+function shiftBase(semitones) {      // octave buttons: move the whole range
+  baseNote = Math.max(0, Math.min(127 - KEYS + 1, baseNote + semitones));
+  saveRange(); buildKeyboard();
+}
+function setRange(lo, hi) {          // Match: from the real keyboard's left-most to right-most key
+  if (isBlack(lo)) lo--;
+  if (isBlack(hi)) hi++;
+  baseNote = lo; KEYS = hi - lo + 1;
+  saveRange(); buildKeyboard();
 }
 function buildKeyboard() {
   const kbd = $('kbd');
@@ -228,9 +409,11 @@ function buildKeyboard() {
     const el = document.createElement('div');
     el.className = 'key ' + (black ? 'b' : 'w') + (down.has(n) ? ' down' : '');
     el.dataset.note = n;
-    if (black) { el.style.left = (wi * w - w * 0.3) + '%'; el.style.width = (w * 0.6) + '%'; }
+    // Every key is labeled: white keys with name and octave (C's in bold), black keys with the sharp
+    if (black) { el.style.left = (wi * w - w * 0.3) + '%'; el.style.width = (w * 0.6) + '%';
+      el.innerHTML = `<span>${noteName(n)}</span>`; }
     else { el.style.left = (wi * w) + '%'; el.style.width = w + '%'; wi++;
-      if (n % 12 === 0) el.innerHTML = `<span>${noteName(n)}</span>`; }
+      el.innerHTML = `<span${n % 12 === 0 ? ' class="c"' : ''}>${noteName(n)}</span>`; }
     kbd.appendChild(el);
   }
 }
@@ -239,30 +422,53 @@ function ensureVisible(n) {
   if (n < baseNote) setBase(n);
   else if (n >= baseNote + KEYS) setBase(n - KEYS + 12);
 }
-// "Match keyboard": the next key pressed on the real keyboard is taken as its lowest key.
-// Keyboards don't report their octave setting, so this is how the page lines up with them.
-let matching = false;
-function startMatch() {
-  matching = true;
-  $('match').classList.add('primary');
-  $('range').textContent = '– press the lowest key on your keyboard';
-  log('match: press the lowest key on your keyboard');
+// ---------- Match keyboard ----------
+// Keyboards don't report their octave setting or size, so on every page load the page asks
+// for the real keyboard's left-most key, then its right-most key, and shows exactly that range.
+let matchStep = 0, matchLow = null, matchedThisVisit = false, quietStream = false;
+function showMatch(error) {
+  const o = $('matchOverlay');
+  o.classList.toggle('hidden', !matchStep);
+  $('match').classList.toggle('primary', !!matchStep);
+  if (!matchStep) return;
+  o.dataset.step = matchStep;
+  const total = soundOn() ? 2 : 3;
+  $('matchArrow').textContent = matchStep === 1 ? '◀' : matchStep === 2 ? '▶' : '';
+  $('matchTitle').textContent = matchStep === 1 ? 'Press the LEFT-most key on your keyboard'
+                              : matchStep === 2 ? 'Now press the RIGHT-most key'
+                              : '🔊 Click here to turn on the sound';
+  $('matchStep').textContent = `Step ${matchStep} of ${total}` + (matchStep === 2 ? ` · left-most key: ${noteName(matchLow)}` : '');
+  $('matchSub').textContent = matchStep === 3 ? 'Browsers stay silent until you click the page once'
+                                              : 'so the screen shows exactly your keys';
+  $('matchSkip').classList.toggle('hidden', matchStep === 3);
+  $('matchErr').textContent = error || '';
 }
-function stopMatch() {
-  matching = false;
-  $('match').classList.remove('primary');
-  buildKeyboard();
+const soundOn = () => !!ctx && ctx.state === 'running';
+// Step 3 (only if the page is still muted): one click on the page turns the sound on
+function finishMatchFlow() { matchStep = soundOn() ? 0 : 3; showMatch(); }
+function startMatch() { matchStep = 1; matchLow = null; showMatch(); log('match: press the left-most key'); }
+function cancelMatch() { matchStep = 0; showMatch(); }
+function matchKey(n) {
+  if (matchStep === 3) { showMatch('Click the page with your mouse (or tap it) to turn on the sound'); return; }
+  if (matchStep === 1) { matchLow = n; matchStep = 2; showMatch(); return; }
+  if (n <= matchLow + 4) { showMatch(`That's ${noteName(n)}, near the left end. Press the key at the far right.`); return; }
+  setRange(matchLow, n);
+  matchedThisVisit = true;
+  log(`match: ${noteName(baseNote)}–${noteName(baseNote + KEYS - 1)} (${KEYS} keys)`);
+  finishMatchFlow();
 }
-function finishMatch(n) {
-  matching = false;
-  $('match').classList.remove('primary');
-  setBase(n);
-  log(`match: keyboard starts at ${noteName(baseNote)}`);
-}
-$('match').addEventListener('click', () => matching ? stopMatch() : startMatch());
-$('octDown').addEventListener('click', () => { matching = false; $('match').classList.remove('primary'); setBase(baseNote - 12); });
-$('octUp').addEventListener('click', () => { matching = false; $('match').classList.remove('primary'); setBase(baseNote + 12); });
-try { const b = localStorage.getItem('baseNote'); if (b !== null && !isNaN(+b)) baseNote = +b; } catch (e) {}
+$('match').addEventListener('click', () => matchStep ? cancelMatch() : startMatch());
+$('matchSkip').addEventListener('click', () => finishMatchFlow());
+$('matchOverlay').addEventListener('click', () => {
+  if (matchStep !== 3) return;
+  unlockAudio();                       // this click is what the browser needs
+  matchStep = 0; showMatch();
+});
+$('octDown').addEventListener('click', () => { cancelMatch(); shiftBase(-12); });
+$('octUp').addEventListener('click', () => { cancelMatch(); shiftBase(12); });
+{ const b = +recall('baseNote'), k = +recall('keys');
+  if (recall('baseNote') !== null && b >= 0 && b <= 127) baseNote = b;
+  if (k >= 8 && k <= 88) KEYS = k; }
 // Touch / mouse play on the on-screen keys
 $('kbd').addEventListener('pointerdown', e => {
   const n = +e.target.closest('.key')?.dataset.note;
@@ -288,6 +494,10 @@ function resumeAudio() {
     limiter.attack.value = 0.002; limiter.release.value = 0.2;
     limiter.connect(ctx.destination);
     master = ctx.createGain(); master.gain.value = masterLevel(); master.connect(limiter);
+    // A little room reverb so the piano doesn't sound bone-dry
+    const verb = ctx.createConvolver(), wet = ctx.createGain();
+    verb.buffer = roomImpulse(2.2); wet.gain.value = 0.22;
+    master.connect(verb).connect(wet).connect(limiter);
     lfo = ctx.createOscillator(); lfo.frequency.value = 5.5;
     lfoGain = ctx.createGain(); lfoGain.gain.value = 0;
     lfo.connect(lfoGain); lfo.start();
@@ -296,11 +506,24 @@ function resumeAudio() {
   if ($('wave').value === 'piano') loadPiano();
 }
 const freq = n => 440 * Math.pow(2, (n - 69) / 12);
+function roomImpulse(seconds) {   // decaying stereo noise = simple room reverb
+  const len = Math.floor(ctx.sampleRate * seconds), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.5) * (i < 400 ? i / 400 : 1);
+  }
+  return buf;
+}
 
 // ---------- Sampled piano (Salamander Grand Piano, CC BY 3.0) ----------
-const PIANO_URL = 'https://tonejs.github.io/audio/salamander/';
-const piano = new Map();   // midi note -> AudioBuffer
-const pianoPeak = new Map(); // midi note -> peak level, used to normalize (raw samples peak ~0.2)
+// Three velocity layers (soft / medium / hard) of the Salamander Grand, as hosted by
+// the Tone.js Piano project. The medium layer loads first so sound is ready sooner;
+// the soft and hard layers follow in the background.
+const PIANO_URL = 'https://tambien.github.io/Piano/audio/';
+const LAYERS = [9, 4, 14];          // Salamander velocity layers v1 (softest) … v16 (hardest); 9 loads first
+const pianoLayers = new Map();      // layer -> Map(midi note -> AudioBuffer)
+const piano = new Map();            // medium layer, used to find the nearest sampled note
+const pianoPeak = new Map(); // midi note -> peak level of the medium layer, used to normalize
 function bufferPeak(buf) {
   let m = 0;
   for (let c = 0; c < buf.numberOfChannels; c++) {
@@ -317,26 +540,43 @@ function pianoFiles() {
   list.push(['C8', 108]);
   return list;
 }
+let pianoBytes = 0;
+async function loadLayer(layer, onEach) {
+  const map = new Map();
+  pianoLayers.set(layer, map);
+  await Promise.all(pianoFiles().map(async ([name, note]) => {
+    try {
+      const res = await fetch(`${PIANO_URL}${name}v${layer}.mp3`);
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.arrayBuffer();
+      pianoBytes += data.byteLength;
+      const buf = await ctx.decodeAudioData(data);
+      map.set(note, buf);
+      if (layer === LAYERS[0]) { piano.set(note, buf); pianoPeak.set(note, bufferPeak(buf)); }
+    } catch (e) { console.warn('piano sample failed', name, layer, e); }
+    onEach?.();
+  }));
+}
 async function loadPiano() {
   if (pianoState !== 'idle' || !ctx) return;
   pianoState = 'loading';
-  const files = pianoFiles();
-  let done = 0;
   const label = $('wave').querySelector('[value="piano"]');
+  const total = pianoFiles().length;
+  let done = 0;
+  const mb = () => (pianoBytes / 1e6).toFixed(1) + ' MB';
   label.textContent = 'Piano (loading 0%)';
-  await Promise.all(files.map(async ([name, note]) => {
-    try {
-      const res = await fetch(PIANO_URL + name + '.mp3');
-      if (!res.ok) throw new Error(res.status);
-      const buf = await ctx.decodeAudioData(await res.arrayBuffer());
-      piano.set(note, buf);
-      pianoPeak.set(note, bufferPeak(buf));
-    } catch (e) { console.warn('piano sample failed', name, e); }
-    label.textContent = `Piano (loading ${Math.round(++done / files.length * 100)}%)`;
-  }));
+  await loadLayer(LAYERS[0], () => label.textContent = `Piano (loading ${Math.round(++done / total * 100)}%, ${mb()})`);
   pianoState = piano.size ? 'ready' : 'failed';
   label.textContent = piano.size ? 'Piano' : 'Piano (failed to load)';
-  log(piano.size ? `piano loaded (${piano.size} samples)` : 'piano samples failed to load; using triangle');
+  if (!piano.size) { log('piano samples failed to load; using triangle'); return; }
+  log(`piano ready (${piano.size} samples, ${mb()}); loading soft and hard layers…`);
+  for (const layer of LAYERS.slice(1)) await loadLayer(layer);
+  log(`piano: all ${LAYERS.length} velocity layers loaded (${mb()})`);
+}
+// Soft playing uses the soft layer, hard playing the hard one (if they've loaded yet).
+function layerFor(vel) {
+  const want = vel < 50 ? 4 : vel > 100 ? 14 : 9;
+  return pianoLayers.get(want)?.size ? want : LAYERS[0];
 }
 function nearestSample(n) {
   let best = null, dist = 1e9;
@@ -346,23 +586,308 @@ function nearestSample(n) {
 function pianoVoice(n, vel) {
   const s = nearestSample(n);
   const src = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
-  src.buffer = piano.get(s);
+  src.buffer = pianoLayers.get(layerFor(vel))?.get(s) || piano.get(s);
   src.playbackRate.value = Math.pow(2, (n - s) / 12);
   src.detune.value = bendCents;
   lfoGain.connect(src.detune);
   const v = vel / 127;
   filter.type = 'lowpass';                       // softer notes sound darker, like a real piano
-  filter.frequency.value = 800 + v * v * 14000;
-  gain.gain.value = Math.pow(v, 1.3) * 0.9 / pianoPeak.get(s);
+  filter.frequency.value = 1500 + v * v * 16000;  // gentle: the velocity layers already carry the tone
+  gain.gain.value = (0.3 + 0.7 * v) * 0.9 / pianoPeak.get(s);   // all layers share the medium layer's level, so soft stays soft
   src.connect(filter).connect(gain).connect(master);
   src.start();
   return { osc: src, gain };
 }
 
+// ---------- Played-notes stream ----------
+// Notes are written as they're played, grouped into phrases (a pause over 2.5 s
+// starts a new phrase). Each pause becomes spaces (one per ~quarter second, up to 8);
+// notes within 50 ms share a column, like a chord. A phrase that uses both hands is
+// written as two aligned rows, "R:" (right hand) on top and "L:" (left hand) below;
+// a one-hand phrase stays on a single line with "+" for chords. Live notes below the
+// C in the middle of the on-screen keyboard count as the left hand.
+const CHORD_MS = 50, SPACE_MS = 250, MAX_SPACES = 8, NEWLINE_MS = 2500, STREAM_MAX = 6000;
+let lastNoteAt = 0, playingBack = false;
+let phrase = null, lastRendered = '';   // phrase = { base: text before it, cols: [{ gap, R: [], L: [] }] }
+const liveHand = n => n < baseNote + 12 ? 'L' : 'R';
+const chordText = notes => notes.map(noteName).join('+');
+function renderPhrase(p) {
+  const line = hand => p.cols.filter(c => c[hand].length)
+    .map((c, i) => (i ? ' '.repeat(c.gap) : '') + chordText(c[hand])).join('');
+  if (!p.cols.some(c => c.L.length)) return line('R');           // right hand only: a plain line
+  if (!p.cols.some(c => c.R.length)) return 'L: ' + line('L');   // left hand only: one labeled line
+  let r = 'R: ', l = 'L: ';
+  p.cols.forEach((c, i) => {
+    if (i) { r += ' '.repeat(c.gap); l += ' '.repeat(c.gap); }
+    const a = chordText(c.R), b = chordText(c.L), w = Math.max(a.length, b.length);
+    r += a.padEnd(w); l += b.padEnd(w);
+  });
+  return r.trimEnd() + '\n' + l.trimEnd();
+}
+function streamNote(n) {
+  if (playingBack || quietStream) return;        // don't write Play's notes or the Match key presses
+  const el = $('stream'), now = performance.now(), gap = now - lastNoteAt;
+  lastNoteAt = now;
+  if (!phrase || el.value !== lastRendered || gap > NEWLINE_MS) {   // new phrase (also after the user edits the text)
+    let base = el.value;
+    if (base && !base.endsWith('\n')) base += '\n';
+    if (base.length > STREAM_MAX) { const cut = base.indexOf('\n', base.length - STREAM_MAX); base = cut >= 0 ? base.slice(cut + 1) : ''; }
+    phrase = { base, cols: [] };
+  }
+  const hand = liveHand(n), last = phrase.cols[phrase.cols.length - 1];
+  if (last && gap < CHORD_MS) last[hand].push(n);
+  else phrase.cols.push({ gap: Math.min(MAX_SPACES, Math.max(1, Math.round(gap / SPACE_MS))),
+                          R: hand === 'R' ? [n] : [], L: hand === 'L' ? [n] : [] });
+  el.value = lastRendered = phrase.base + renderPhrase(phrase);
+  el.scrollTop = el.scrollHeight;
+}
+$('clearStream').addEventListener('click', () => {
+  $('stream').value = lastRendered = ''; phrase = null;
+});
+$('clearSong').addEventListener('click', () => { stopPlayback(); $('song').value = ''; $('songMsg').textContent = ''; store('song', ''); });
+$('toSong').addEventListener('click', () => {
+  if (!$('stream').value.trim()) return;
+  stopPlayback(); $('song').value = $('stream').value; store('song', $('song').value);
+  $('songMsg').textContent = 'Copied what you played. Press ▶ Play to hear it.';
+});
+// The Song box is remembered between visits
+if (recall('song')) $('song').value = recall('song');
+$('song').addEventListener('input', () => store('song', $('song').value));
+$('copyStream').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('stream').value); $('copyStream').textContent = 'Copied'; }
+  catch (e) { $('copyStream').textContent = 'Copy failed'; }
+  setTimeout(() => $('copyStream').textContent = 'Copy', 1500);
+});
+
+// ---------- Play pasted notes ----------
+// Reads the same format the stream writes. On a single line: each space = a quarter-second
+// pause, "+" joins a chord, and notes below middle C go to the left hand. A pair of lines
+// starting "R:" and "L:" is read as two aligned rows: notes in the same column play together.
+// Each new line (or phrase) adds a one-second pause. Flats (Eb4, E♭4) work too, and
+// "-" / "–" is a visual "hold" marker that takes no time itself.
+// Markings (they apply from the next note on, in either row):
+//   dynamics  pp p mp mf f ff (also ppp, fff)
+//   hairpins  <  (crescendo)  >  (diminuendo), heading to the next dynamic marking
+//   pedal     Ped  (press, or change, the sustain pedal)   *  (lift it)
+// A line ending in "|" (a bar line) runs straight into the next line: the spaces before
+// the "|" are the wait, instead of the usual one-second pause. Lines starting with "#"
+// are comments, and a line with only markings on it adds no pause.
+const SPLIT_NOTE = 60;
+const LABEL = /^\s*([RLrl]):/;
+const DYN = { ppp: 22, pp: 34, p: 48, mp: 62, mf: 76, f: 94, ff: 108, fff: 120 };
+const isHold = s => /^[-–—|]+$/.test(s);
+function markOf(tok) {
+  const t = tok.replace(/\.$/, '');
+  if (DYN[t]) return { dyn: DYN[t] };
+  if (t === '<' || /^cresc/i.test(t)) return { ramp: 1 };
+  if (t === '>' || /^dim/i.test(t)) return { ramp: -1 };
+  if (/^ped$/i.test(t)) return { ped: 'change' };
+  if (t === '*') return { ped: 'up' };
+  return null;
+}
+function parseNote(tok) {
+  const m = /^([A-Ga-g])([#♯b♭]?)(-?\d)$/.exec(tok);
+  if (!m) return null;
+  let n = NAMES.indexOf(m[1].toUpperCase()) + (m[2] === '#' || m[2] === '♯' ? 1 : m[2] ? -1 : 0);
+  n += (+m[3] + 1) * 12;
+  return n >= 0 && n <= 127 ? n : null;
+}
+function parseLine(line) {          // one row -> { events: [{ at, R, L, marks }], lead, trail, bad }
+  const events = [], bad = [];
+  let t = 0, gap = 0, lead = 0, first = true, marks = [], cont = null;
+  for (const [tk] of line.matchAll(/[ \t]+|[^\s]+/g)) {
+    if (/^[ \t]/.test(tk)) { gap += tk.replace(/\t/g, '    ').length * SPACE_MS; continue; }
+    if (tk === '|') { cont = gap; continue; }      // only counts if it's the last thing on the line
+    if (isHold(tk)) continue;
+    cont = null;
+    const mk = markOf(tk);
+    if (mk) { marks.push(mk); continue; }
+    const notes = tk.split('+').map(parseNote);
+    if (notes.some(n => n === null)) { bad.push(tk); continue; }
+    if (first) { lead = gap; first = false; } else t += Math.max(gap, SPACE_MS);
+    events.push({ at: t, R: notes.filter(n => n >= SPLIT_NOTE), L: notes.filter(n => n < SPLIT_NOTE), marks });
+    gap = 0; marks = [];
+  }
+  return { events, lead, trail: gap, bad, leftover: marks, cont };
+}
+function parseRows(rRow, lRow) {    // two aligned rows -> same shape as parseLine
+  const cols = new Map(), bad = [], markAt = [];
+  let pipeAt = -1;
+  for (const [hand, row] of [['R', rRow], ['L', lRow]]) {
+    const lastTok = [...row.matchAll(/[^\s]+/g)].pop();
+    if (lastTok?.[0] === '|') pipeAt = Math.max(pipeAt, lastTok.index);
+    for (const m of row.matchAll(/[^\s]+/g)) {
+      if (isHold(m[0])) continue;
+      const mk = markOf(m[0]);
+      if (mk) { markAt.push([m.index, mk]); continue; }
+      const notes = m[0].split('+').map(parseNote);
+      if (notes.some(n => n === null)) { bad.push(m[0]); continue; }
+      const c = cols.get(m.index) || { R: [], L: [], end: 0 };
+      c[hand].push(...notes);
+      c.end = Math.max(c.end, m.index + m[0].length);
+      cols.set(m.index, c);
+    }
+  }
+  const starts = [...cols.keys()].sort((a, b) => a - b), events = [];
+  markAt.sort((a, b) => a[0] - b[0]);
+  let t = 0, mi = 0;
+  starts.forEach((s, i) => {
+    if (i) t += Math.max(s - cols.get(starts[i - 1]).end, 1) * SPACE_MS;
+    const marks = [];
+    while (mi < markAt.length && markAt[mi][0] < s) marks.push(markAt[mi++][1]);   // markings written before this column
+    events.push({ at: t, R: cols.get(s).R, L: cols.get(s).L, marks });
+  });
+  const lastEnd = starts.length ? cols.get(starts[starts.length - 1]).end : 0;
+  const cont = pipeAt >= 0 ? Math.max(pipeAt - lastEnd, 1) * SPACE_MS : null;
+  return { events, lead: 0, trail: 0, bad, leftover: markAt.slice(mi).map(m => m[1]), cont };
+}
+// Turn dynamics and hairpins into a loudness for each moment. Without any markings,
+// the melody plays at 84 and the bass at 68, as before.
+function applyDynamics(events) {
+  const lv = new Array(events.length).fill(null);
+  let cur = null, rampAt = -1, rampDir = 0;
+  const finishRamp = (end, target) => {
+    const from = lv[rampAt] ?? 76;
+    for (let j = rampAt; j < end; j++) lv[j] = from + (target - from) * (j - rampAt) / Math.max(1, end - rampAt);
+    rampAt = -1;
+  };
+  events.forEach((ev, i) => {
+    for (const m of ev.marks) {
+      if (m.dyn) { if (rampAt >= 0) finishRamp(i, m.dyn); cur = m.dyn; }
+      if (m.ramp) { rampAt = i; rampDir = m.ramp; cur ??= 76; }
+    }
+    lv[i] = cur;
+  });
+  if (rampAt >= 0) finishRamp(events.length, Math.min(120, Math.max(20, (lv[rampAt] ?? 76) + 30 * rampDir)));
+  const any = lv.some(v => v !== null);
+  events.forEach((ev, i) => {
+    const v = any ? (lv[i] ?? 76) : null;
+    ev.vR = v ?? 84; ev.vL = v === null ? 68 : Math.max(15, v - 8);
+    ev.ped = ev.marks.reduce((p, m) => m.ped || p, undefined);
+  });
+}
+function parseStream(text) {
+  const lines = text.split('\n'), events = [], bad = [];
+  const blankLabel = s => s.replace(LABEL, m => ' '.repeat(m.length));   // keeps the columns lined up
+  let t = 0, pending = 0, any = false, carry = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*#/.test(lines[i])) continue;           // comment line
+    const a = LABEL.exec(lines[i]), b = i + 1 < lines.length ? LABEL.exec(lines[i + 1]) : null;
+    let ph;
+    if (a && b && a[1].toUpperCase() !== b[1].toUpperCase()) {
+      const [r, l] = a[1].toUpperCase() === 'R' ? [lines[i], lines[i + 1]] : [lines[i + 1], lines[i]];
+      ph = parseRows(blankLabel(r), blankLabel(l));
+      i++;
+    } else {
+      ph = parseLine(a ? blankLabel(lines[i]) : lines[i]);
+      if (a) {                                     // a lone "R:" or "L:" line: all notes go to that hand
+        const h = a[1].toUpperCase();
+        ph.lead = 0;                               // the label isn't a pause
+        ph.events.forEach(e => { const all = [...e.R, ...e.L]; e.R = h === 'R' ? all : []; e.L = h === 'L' ? all : []; });
+      }
+    }
+    bad.push(...ph.bad);
+    if (ph.events.length) {
+      ph.events[0].marks = [...carry, ...ph.events[0].marks]; carry = [];
+      const offset = any ? t + Math.max(pending + ph.lead, SPACE_MS) : 0;
+      ph.events.forEach(e => events.push({ at: offset + e.at, R: e.R, L: e.L, marks: e.marks }));
+      t = offset + ph.events[ph.events.length - 1].at;
+      pending = ph.cont ?? ph.trail + 1000; any = true;
+    } else if (any && !ph.leftover.length) pending += 1000;   // an empty line is an extra pause
+    carry.push(...ph.leftover);                    // markings at a line's end apply to the next line
+  }
+  applyDynamics(events);
+  return { events, bad };
+}
+// A new note only releases earlier notes of its own hand, so a bass note keeps
+// ringing under the melody instead of being cut off by it. "Ped" holds everything
+// until the next "Ped" (pedal change) or "*" (pedal up).
+let playTimers = [], playOn = { L: [], R: [] }, playStarted = new Set(), playPedal = false;
+function pedalUp() { playPedal = false; if (!sustain) releaseSustained(); }
+function stopPlayback() {
+  playTimers.forEach(clearTimeout); playTimers = [];
+  playStarted.forEach(n => noteOff(n));
+  playStarted.clear(); playOn = { L: [], R: [] };
+  pedalUp();
+  playingBack = false;
+  $('playStream').textContent = '▶ Play';
+}
+function playStream() {
+  if (playingBack) { stopPlayback(); return; }
+  const { events, bad } = parseStream($('song').value);
+  $('songMsg').textContent = bad.length ? `Skipped (not a note): ${[...new Set(bad)].slice(0, 8).join(' ')}` : '';
+  if (!events.length) { $('songMsg').textContent ||= 'No notes to play. Paste notes like: A4 C5 A4 G4'; return; }
+  resumeAudio();
+  playingBack = true;
+  $('playStream').textContent = '■ Stop';
+  const speed = +$('speed').value;
+  // Play it like a person: slightly uneven loudness and timing, and each note let go
+  // just after the next one starts (legato).
+  const jitter = r => (Math.random() * 2 - 1) * r;
+  events.forEach(ev => playTimers.push(setTimeout(() => {
+    const released = [];
+    for (const hand of ['L', 'R']) {
+      if (!ev[hand].length) continue;
+      const prev = playOn[hand].filter(n => !ev[hand].includes(n));
+      playOn[hand].filter(n => ev[hand].includes(n)).forEach(n => noteOff(n));   // re-struck notes restart
+      const vel = hand === 'R' ? ev.vR : ev.vL;
+      ev[hand].forEach(n => { playStarted.add(n); noteOn(n, Math.max(10, Math.min(127, Math.round(vel + jitter(6))))); });
+      playOn[hand] = ev[hand];
+      released.push(...prev);
+    }
+    if (ev.ped) {                                  // pedal change: the old sound stops as the new notes start
+      released.forEach(n => { if (!playOn.L.includes(n) && !playOn.R.includes(n)) noteOff(n); });
+      pedalUp();
+      if (ev.ped === 'change') playPedal = true;
+    } else {
+      playTimers.push(setTimeout(() => released.forEach(n => { if (!playOn.L.includes(n) && !playOn.R.includes(n)) noteOff(n); }), 60));
+    }
+  }, Math.max(0, ev.at / speed + jitter(8)))));
+  const end = events[events.length - 1].at / speed + (playPedal || events.some(e => e.ped === 'change') ? 2500 : 900);
+  playTimers.push(setTimeout(stopPlayback, end));
+}
+$('playStream').addEventListener('click', playStream);
+
+// ---------- "Now playing": every held note, plus the chord name ----------
+const CHORDS = [   // intervals above the root -> name suffix
+  [[0, 4, 7], ''], [[0, 3, 7], 'm'], [[0, 3, 6], 'dim'], [[0, 4, 8], 'aug'], [[0, 2, 7], 'sus2'], [[0, 5, 7], 'sus4'],
+  [[0, 4, 7, 10], '7'], [[0, 4, 7, 11], 'maj7'], [[0, 3, 7, 10], 'm7'], [[0, 3, 6, 10], 'm7♭5'], [[0, 3, 6, 9], 'dim7'],
+  [[0, 4, 7, 9], '6'], [[0, 3, 7, 9], 'm6'], [[0, 4, 7, 2], 'add9'], [[0, 7], '5'],
+];
+function chordName(notes) {
+  const pcs = [...new Set(notes.map(n => n % 12))];
+  if (pcs.length < 2) return '';
+  const bass = Math.min(...notes) % 12;
+  for (const root of pcs) {
+    const set = new Set(pcs.map(p => (p - root + 12) % 12));
+    for (const [iv, suf] of CHORDS) {
+      if (iv.length === set.size && iv.every(i => set.has(i))) {
+        return NAMES[root] + suf + (bass !== root ? '/' + NAMES[bass] : '');
+      }
+    }
+  }
+  return '';
+}
+let lastHeldText = '–';
+function showHeld() {
+  const notes = [...down].sort((a, b) => a - b);
+  if (notes.length) lastHeldText = notes.map(noteName).join(' · ');
+  $('mNote').textContent = lastHeldText;
+  $('mNote').classList.toggle('idle', !notes.length);       // last notes stay visible, dimmed
+  const c = chordName(notes);
+  if (notes.length) $('chord').textContent = c;
+}
+
 function noteOn(n, vel) {
   held.add(n); down.add(n);
-  ensureVisible(n); keyEl(n)?.classList.add('down');
-  $('mNote').textContent = noteName(n);
+  streamNote(n);
+  ensureVisible(n);
+  const k = keyEl(n);
+  if (k) { k.classList.add('down'); k.style.setProperty('--v', (vel / 127).toFixed(2)); }   // key color shows how hard it was hit
+  showHeld();
+  if (ctx && ctx.state !== 'running') {           // playing before the first click: point at the sound button
+    const b = $('soundOn'); b.classList.remove('hidden', 'flash'); void b.offsetWidth; b.classList.add('flash');
+  }
   $('mVel').textContent = vel; $('bVel').style.width = (vel / 127 * 100) + '%';
   let wave = $('wave').value;
   if (!ctx || wave === 'off') return;
@@ -388,7 +913,8 @@ function noteOn(n, vel) {
 function noteOff(n) {
   held.delete(n); down.delete(n);
   keyEl(n)?.classList.remove('down');
-  if (!sustain) stopVoice(n, 0.25);
+  showHeld();
+  if (!sustain && !playPedal) stopVoice(n, releaseTime());
 }
 function stopVoice(n, rel) {
   const v = voices.get(n);
@@ -401,7 +927,9 @@ function stopVoice(n, rel) {
   v.osc.onended = () => { try { lfoGain.disconnect(v.osc.detune); } catch (e) {} };
   voices.delete(n);
 }
-function releaseSustained() { for (const n of [...voices.keys()]) if (!held.has(n)) stopVoice(n, 0.25); }
+// A piano's damper takes about half a second to stop the string; synth sounds stop faster.
+const releaseTime = () => $('wave').value === 'piano' ? 0.5 : 0.25;
+function releaseSustained() { for (const n of [...voices.keys()]) if (!held.has(n)) stopVoice(n, releaseTime()); }
 function allOff() { for (const n of [...voices.keys()]) stopVoice(n, 0.05); held.clear(); down.clear(); buildKeyboard(); }
 function synthBend(v) {
   bendCents = v / 8192 * 200; // ±2 semitones
@@ -422,6 +950,73 @@ $('vol').addEventListener('input', () => {
   if (master) master.gain.setTargetAtTime(masterLevel(), ctx.currentTime, 0.02);
 });
 $('fixedVel').addEventListener('change', () => store('fixedVel', $('fixedVel').checked ? '1' : '0'));
+
+// ---------- Metronome ----------
+// Clicks are scheduled on the audio clock a little ahead of time, so they stay steady
+// even when the page is busy. Beat 1 of each bar gets a higher, louder click.
+let metroOn = false, metroTimer = null, nextClick = 0, beatIdx = 0, tapTimes = [];
+const bpm = () => Math.max(30, Math.min(240, Math.round(+$('bpm').value) || 80));
+const beatsPerBar = () => +$('beatsPerBar').value;
+function setBpm(v) {
+  $('bpm').value = Math.max(30, Math.min(240, Math.round(v)));
+  store('bpm', $('bpm').value);
+}
+function drawBeatDots(active = -1) {
+  // One numbered light per beat (beat 1 in yellow); with "no accent", one round light that flashes
+  const n = beatsPerBar(), el = $('beatDots');
+  if (el.children.length !== n || el.dataset.n != n) {
+    el.innerHTML = Array.from({ length: n }, (_, i) => `<i>${n > 1 ? i + 1 : ''}</i>`).join('');
+    el.dataset.n = n; el.classList.toggle('single', n === 1);
+  }
+  [...el.children].forEach((d, i) => { d.className = (i === active ? 'on' : '') + (i === 0 && n > 1 ? ' first' : ''); });
+}
+function metroClick(t, accent) {
+  const o = ctx.createOscillator(), g = ctx.createGain(), vol = $('metroVol').value / 100;
+  o.frequency.value = accent ? 1760 : 1100;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol * (accent ? 0.9 : 0.5)), t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  o.connect(g).connect(ctx.destination);           // straight out: no reverb on the click
+  o.start(t); o.stop(t + 0.08);
+}
+function metroTick() {
+  while (nextClick < ctx.currentTime + 0.12) {
+    const n = beatsPerBar(), b = beatIdx % n;
+    metroClick(nextClick, n > 1 && b === 0);
+    setTimeout(() => { if (metroOn) drawBeatDots(b); }, Math.max(0, (nextClick - ctx.currentTime) * 1000));
+    nextClick += 60 / bpm();
+    beatIdx = b + 1;
+  }
+}
+function toggleMetro() {
+  if (metroOn) {
+    metroOn = false; clearInterval(metroTimer);
+    $('metro').classList.remove('on'); $('metro').textContent = '▶ Start';
+    drawBeatDots();
+    return;
+  }
+  resumeAudio();
+  metroOn = true; beatIdx = 0; nextClick = ctx.currentTime + 0.08;
+  metroTimer = setInterval(metroTick, 25); metroTick();
+  $('metro').classList.add('on'); $('metro').textContent = '■ Stop';
+}
+$('metro').addEventListener('click', toggleMetro);
+$('bpmDown').addEventListener('click', () => setBpm(bpm() - 1));
+$('bpmUp').addEventListener('click', () => setBpm(bpm() + 1));
+$('bpm').addEventListener('change', () => setBpm(bpm()));
+$('beatsPerBar').addEventListener('change', () => { store('beats', beatsPerBar()); beatIdx = 0; drawBeatDots(); });
+$('metroVol').addEventListener('input', () => store('metroVol', $('metroVol').value));
+// Tap: the average of the last few taps sets the tempo
+$('tap').addEventListener('click', () => {
+  const now = performance.now();
+  if (tapTimes.length && now - tapTimes[tapTimes.length - 1] > 2000) tapTimes = [];
+  tapTimes.push(now); tapTimes = tapTimes.slice(-5);
+  if (tapTimes.length >= 2) setBpm(60000 / ((tapTimes[tapTimes.length - 1] - tapTimes[0]) / (tapTimes.length - 1)));
+});
+if (recall('bpm')) $('bpm').value = recall('bpm');
+if (recall('beats')) $('beatsPerBar').value = recall('beats');
+if (recall('metroVol')) $('metroVol').value = recall('metroVol');
+drawBeatDots();
 
 $('wave').addEventListener('change', () => {
   if ($('wave').value === 'off' && ctx) allOff();
@@ -451,8 +1046,8 @@ async function openGatt() {
     parseBleMidi(new Uint8Array(e.target.value.buffer));
   });
   await characteristic.startNotifications();
-  setStatus(`Connected: ${device.name || 'BLE MIDI device'}`, 'on');
-  startMatch();
+  setStatus(`${device.name || 'BLE MIDI device'} ✓`, 'on');
+  if (!matchedThisVisit && !matchStep) startMatch();
   $('connect').disabled = true; $('disconnect').disabled = false;
   log(`connected to ${device.name}`);
 }
@@ -479,6 +1074,7 @@ let midiAccess = null;
 function setUsbStatus(text, state) {
   $('usbStatus').textContent = 'USB: ' + text;
   $('usbDot').className = 'dot' + (state ? ' ' + state : '');
+  updateConnBar();
 }
 const usbConnected = new Set();   // input ids already connected, so Match starts only for new ones
 function refreshUsbInputs() {
@@ -492,8 +1088,8 @@ function refreshUsbInputs() {
     if (!usbConnected.has(input.id)) added = true;
   }
   usbConnected.clear(); now.forEach(id => usbConnected.add(id));
-  if (added) startMatch();
-  if (names.length) setUsbStatus('connected: ' + names.join(', '), 'on');
+  if (added && !matchedThisVisit && !matchStep) startMatch();
+  if (names.length) setUsbStatus(names.join(', ') + ' ✓', 'on');
   else setUsbStatus('no MIDI keyboard plugged in. Plug it in and it will connect by itself.', 'busy');
   $('usb').disabled = names.length > 0;
 }
@@ -525,6 +1121,25 @@ if (!navigator.bluetooth) {
   $('connect').disabled = true;
 }
 buildKeyboard();
+
+// ---------- Sound ready from the start ----------
+// Browsers keep a page silent until the first click/tap/key press on it (MIDI keys don't
+// count). So: create the audio engine and start downloading the piano right away, and
+// switch sound on at the very first click anywhere. Until then, a yellow button says so.
+function updateSoundButton() {
+  $('soundOn').classList.toggle('hidden', !!ctx && ctx.state === 'running');
+  if (soundOn() && matchStep === 3) { matchStep = 0; showMatch(); }   // a click anywhere also finishes step 3
+}
+function unlockAudio() {
+  resumeAudio();
+  ctx.resume().then(updateSoundButton).catch(() => {});
+}
+resumeAudio();                                         // starts loading the samples now
+startMatch();                                          // every visit: line the screen up with the real keyboard
+ctx.addEventListener?.('statechange', updateSoundButton);
+updateSoundButton();
+for (const type of ['pointerdown', 'keydown', 'touchend']) document.addEventListener(type, unlockAudio, { capture: true });
+$('soundOn').addEventListener('click', unlockAudio);
 </script>
 </body>
 </html>
