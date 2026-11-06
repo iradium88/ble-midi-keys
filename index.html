@@ -78,7 +78,13 @@
     <span>Web Bluetooth isn't available here. Use Chrome on Android, and load the page over HTTPS (or localhost).</span></div>
 
   <div class="card">
-    <div class="label">Keyboard</div>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <div class="label" style="margin:0">Keyboard <span id="range"></span></div>
+      <div class="row">
+        <button id="octDown" aria-label="Show one octave lower">◀ Octave</button>
+        <button id="octUp" aria-label="Show one octave higher">Octave ▶</button>
+      </div>
+    </div>
     <div id="kbd"></div>
   </div>
 
@@ -198,12 +204,19 @@ function handleMidi(msg) {
 }
 
 // ---------- On-screen keyboard (25 keys, follows octave shifts) ----------
-let baseNote = 48; // C3
 const KEYS = 25;
 const down = new Set();
+// Lowest key shown. Remembered per browser so it matches the keyboard's octave setting.
+let baseNote = 48; // C3
+function setBase(n) {
+  baseNote = Math.max(0, Math.min(127 - KEYS + 1, n - (n % 12)));
+  try { localStorage.setItem('baseNote', baseNote); } catch (e) {}
+  buildKeyboard();
+}
 function buildKeyboard() {
   const kbd = $('kbd');
   kbd.innerHTML = '';
+  $('range').textContent = `(${noteName(baseNote)}–${noteName(baseNote + KEYS - 1)})`;
   const whites = [];
   for (let n = baseNote; n < baseNote + KEYS; n++) if (![1,3,6,8,10].includes(n % 12)) whites.push(n);
   const w = 100 / whites.length;
@@ -221,11 +234,12 @@ function buildKeyboard() {
 }
 function keyEl(n) { return $('kbd').querySelector(`[data-note="${n}"]`); }
 function ensureVisible(n) {
-  if (n < baseNote || n >= baseNote + KEYS) {
-    baseNote = Math.min(127 - KEYS + 1, n - (n % 12));
-    buildKeyboard();
-  }
+  if (n < baseNote) setBase(n);
+  else if (n >= baseNote + KEYS) setBase(n - KEYS + 12);
 }
+$('octDown').addEventListener('click', () => setBase(baseNote - 12));
+$('octUp').addEventListener('click', () => setBase(baseNote + 12));
+try { const b = localStorage.getItem('baseNote'); if (b !== null && !isNaN(+b)) baseNote = +b; } catch (e) {}
 // Touch / mouse play on the on-screen keys
 $('kbd').addEventListener('pointerdown', e => {
   const n = +e.target.closest('.key')?.dataset.note;
