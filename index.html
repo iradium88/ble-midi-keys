@@ -81,6 +81,7 @@
     <div class="row" style="justify-content:space-between;margin-bottom:8px">
       <div class="label" style="margin:0">Keyboard <span id="range"></span></div>
       <div class="row">
+        <button id="match" aria-label="Match the on-screen keyboard to your keyboard">Match keyboard</button>
         <button id="octDown" aria-label="Show one octave lower">◀ Octave</button>
         <button id="octUp" aria-label="Show one octave higher">Octave ▶</button>
       </div>
@@ -180,6 +181,7 @@ function handleMidi(msg) {
   const [st, d1, d2] = msg;
   const type = st & 0xf0, ch = (st & 0x0f) + 1;
   if (type === 0x90 && d2 > 0) {
+    if (matching) finishMatch(d1);
     noteOn(d1, d2);
     log(`ch${ch} note on  ${noteName(d1).padEnd(4)} vel ${d2}`);
   } else if (type === 0x80 || (type === 0x90 && d2 === 0)) {
@@ -237,8 +239,29 @@ function ensureVisible(n) {
   if (n < baseNote) setBase(n);
   else if (n >= baseNote + KEYS) setBase(n - KEYS + 12);
 }
-$('octDown').addEventListener('click', () => setBase(baseNote - 12));
-$('octUp').addEventListener('click', () => setBase(baseNote + 12));
+// "Match keyboard": the next key pressed on the real keyboard is taken as its lowest key.
+// Keyboards don't report their octave setting, so this is how the page lines up with them.
+let matching = false;
+function startMatch() {
+  matching = true;
+  $('match').classList.add('primary');
+  $('range').textContent = '– press the lowest key on your keyboard';
+  log('match: press the lowest key on your keyboard');
+}
+function stopMatch() {
+  matching = false;
+  $('match').classList.remove('primary');
+  buildKeyboard();
+}
+function finishMatch(n) {
+  matching = false;
+  $('match').classList.remove('primary');
+  setBase(n);
+  log(`match: keyboard starts at ${noteName(baseNote)}`);
+}
+$('match').addEventListener('click', () => matching ? stopMatch() : startMatch());
+$('octDown').addEventListener('click', () => { matching = false; $('match').classList.remove('primary'); setBase(baseNote - 12); });
+$('octUp').addEventListener('click', () => { matching = false; $('match').classList.remove('primary'); setBase(baseNote + 12); });
 try { const b = localStorage.getItem('baseNote'); if (b !== null && !isNaN(+b)) baseNote = +b; } catch (e) {}
 // Touch / mouse play on the on-screen keys
 $('kbd').addEventListener('pointerdown', e => {
@@ -429,6 +452,7 @@ async function openGatt() {
   });
   await characteristic.startNotifications();
   setStatus(`Connected: ${device.name || 'BLE MIDI device'}`, 'on');
+  startMatch();
   $('connect').disabled = true; $('disconnect').disabled = false;
   log(`connected to ${device.name}`);
 }
@@ -456,13 +480,19 @@ function setUsbStatus(text, state) {
   $('usbStatus').textContent = 'USB: ' + text;
   $('usbDot').className = 'dot' + (state ? ' ' + state : '');
 }
+const usbConnected = new Set();   // input ids already connected, so Match starts only for new ones
 function refreshUsbInputs() {
-  const names = [];
+  const names = [], now = new Set();
+  let added = false;
   for (const input of midiAccess.inputs.values()) {
     if (input.state !== 'connected') continue;
     input.onmidimessage = e => handleMidi(Array.from(e.data));
     names.push(input.name);
+    now.add(input.id);
+    if (!usbConnected.has(input.id)) added = true;
   }
+  usbConnected.clear(); now.forEach(id => usbConnected.add(id));
+  if (added) startMatch();
   if (names.length) setUsbStatus('connected: ' + names.join(', '), 'on');
   else setUsbStatus('no MIDI keyboard plugged in. Plug it in and it will connect by itself.', 'busy');
   $('usb').disabled = names.length > 0;
