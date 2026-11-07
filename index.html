@@ -139,6 +139,20 @@
   #log { font: 11px/1.45 ui-monospace, Consolas, monospace; height: 90px; overflow-y: auto; color: var(--muted);
     white-space: pre; background: var(--bg); border-radius: 8px; padding: 6px 8px; }
   .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  /* Chord chart: small keyboard diagrams */
+  details.chords summary { cursor: pointer; margin-bottom: 8px; }
+  .chord-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .chord-kind { width: 44px; flex: none; color: var(--muted); font-size: 12px; }
+  .chord-grid { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  .chordcard { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 5px 6px 4px;
+    cursor: pointer; transition: border-color .1s, box-shadow .1s; }
+  .chordcard:hover { border-color: #3a4150; }
+  .chordcard .cn { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; margin-bottom: 3px; }
+  .chordcard b { font-size: 15px; } .chordcard small { color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .chordcard svg { display: block; width: 100%; height: auto; }
+  .chordcard.match { border-color: var(--accent); box-shadow: 0 0 12px #4fd1a566; }
+  .chordcard.match b { color: var(--accent); }
+  @media (max-width: 760px) { .chord-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .chord-row { align-items: flex-start; } }
   @media (max-width: 560px) {
     body { padding: 10px; }
     .conn { margin-left: 0; }
@@ -199,6 +213,12 @@
       <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume</label>
     </div>
   </section>
+
+  <details class="card chords" open>
+    <summary class="label">Chords <span class="hint">right hand 1-3-5 · click one to hear it · the chord you play lights up</span></summary>
+    <div class="chord-row"><span class="chord-kind">Major</span><div class="chord-grid" id="majorChords"></div></div>
+    <div class="chord-row"><span class="chord-kind">Minor</span><div class="chord-grid" id="minorChords"></div></div>
+  </details>
 
   <section class="card metro">
     <span class="label" style="margin:0">Metronome</span>
@@ -418,7 +438,9 @@ function buildKeyboard() {
   }
 }
 function keyEl(n) { return $('kbd').querySelector(`[data-note="${n}"]`); }
+let keepRange = false;                 // set while the chord chart plays: never move the on-screen range
 function ensureVisible(n) {
+  if (keepRange) return;
   if (n < baseNote) setBase(n);
   else if (n >= baseNote + KEYS) setBase(n - KEYS + 12);
 }
@@ -876,6 +898,9 @@ function showHeld() {
   $('mNote').classList.toggle('idle', !notes.length);       // last notes stay visible, dimmed
   const c = chordName(notes);
   if (notes.length) $('chord').textContent = c;
+  // Light up the matching diagram in the chord chart (ignoring which note is in the bass)
+  const plain = c.split('/')[0];
+  document.querySelectorAll('.chordcard').forEach(el => el.classList.toggle('match', notes.length > 0 && el.dataset.name === plain));
 }
 
 function noteOn(n, vel) {
@@ -1136,6 +1161,47 @@ function unlockAudio() {
 }
 resumeAudio();                                         // starts loading the samples now
 startMatch();                                          // every visit: line the screen up with the real keyboard
+
+// ---------- Chord chart ----------
+// One small keyboard (C to G an octave and a half up) per major and minor chord, in root
+// position. Clicking a chord plays it on the big keyboard; playing a chord lights its diagram.
+const CHART_ROOTS = [0, 2, 4, 5, 7, 9, 11];               // C D E F G A B
+const FLATS = { 'D#': 'E♭', 'G#': 'A♭', 'A#': 'B♭' };
+function chordNotes(pc, minor) { return [0, minor ? 3 : 4, 7].map(i => pc + i); }   // semitones above C
+function spell(semi, minor) { const n = NAMES[semi % 12]; return minor && FLATS[n] ? FLATS[n] : n.replace('#', '♯'); }
+function miniKeyboard(lit) {             // lit: semitones above C (0..19) to highlight
+  const whites = [], W = 110, H = 44;
+  for (let s = 0; s <= 19; s++) if (!isBlack(s)) whites.push(s);
+  const ww = W / whites.length, bw = ww * 0.62;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
+  whites.forEach((s, i) => svg += `<rect x="${i * ww + .3}" y=".3" width="${ww - .6}" height="${H - .6}" rx="1.5"
+    fill="${lit.includes(s) ? '#4fd1a5' : '#eef0f4'}" stroke="#9ea3ad" stroke-width=".5"/>`);
+  whites.forEach((s, i) => { if (isBlack(s + 1) && s + 1 <= 19) svg += `<rect x="${(i + 1) * ww - bw / 2}" y="0" width="${bw}"
+    height="${H * .6}" rx="1" fill="${lit.includes(s + 1) ? '#4fd1a5' : '#22252c'}" ${lit.includes(s + 1) ? 'stroke="#0b3d2d" stroke-width=".8"' : ''}/>`; });
+  return svg + '</svg>';
+}
+function buildChordChart() {
+  for (const minor of [false, true]) {
+    $(minor ? 'minorChords' : 'majorChords').innerHTML = CHART_ROOTS.map(pc => {
+      const name = NAMES[pc] + (minor ? 'm' : ''), notes = chordNotes(pc, minor);
+      return `<div class="chordcard" data-name="${name}" data-pc="${pc}" data-minor="${minor ? 1 : 0}" title="Play ${name}">
+        <div class="cn"><b>${name}</b><small>${notes.map(s => spell(s, minor)).join(' ')}</small></div>${miniKeyboard(notes)}</div>`;
+    }).join('');
+  }
+}
+function playChartChord(pc, minor) {     // always around middle C; the on-screen range stays as it is
+  // C–F chords start on C4–F4; G, A and B start just below middle C (G3, A3, B3)
+  const notes = chordNotes((pc <= 5 ? 60 : 48) + pc, minor);
+  quietStream = true; keepRange = true;
+  notes.forEach(n => noteOn(n, 80));
+  quietStream = false; keepRange = false;
+  setTimeout(() => notes.forEach(n => noteOff(n)), 900);
+}
+buildChordChart();
+document.querySelector('.chords').addEventListener('click', e => {
+  const c = e.target.closest('.chordcard');
+  if (c) { unlockAudio(); playChartChord(+c.dataset.pc, c.dataset.minor === '1'); }
+});
 ctx.addEventListener?.('statechange', updateSoundButton);
 updateSoundButton();
 for (const type of ['pointerdown', 'keydown', 'touchend']) document.addEventListener(type, unlockAudio, { capture: true });
