@@ -211,11 +211,12 @@
         <b id="volVal">70</b>
       </label>
       <label class="ctl"><input id="fixedVel" type="checkbox"> Fixed volume</label>
+      <label class="ctl" id="wakeCtl" title="Stops the phone from dimming and going to sleep while this page is open"><input id="wake" type="checkbox" checked> Keep screen on</label>
     </div>
   </section>
 
   <details class="card chords" open>
-    <summary class="label">Chords <span class="hint">right hand 1-3-5 · click one to hear it · the chord you play lights up</span></summary>
+    <summary class="label">Chords <span class="hint">left hand 5-3-1, below middle C (red dot) · click one to hear it · the chord you play lights up</span></summary>
     <div class="chord-row"><span class="chord-kind">Major</span><div class="chord-grid" id="majorChords"></div></div>
     <div class="chord-row"><span class="chord-kind">Minor</span><div class="chord-grid" id="minorChords"></div></div>
   </details>
@@ -1163,21 +1164,26 @@ resumeAudio();                                         // starts loading the sam
 startMatch();                                          // every visit: line the screen up with the real keyboard
 
 // ---------- Chord chart ----------
-// One small keyboard (C to G an octave and a half up) per major and minor chord, in root
-// position. Clicking a chord plays it on the big keyboard; playing a chord lights its diagram.
+// One small keyboard (C3 to C5) per major and minor chord, in root position in the left-hand
+// octave below middle C. Clicking a chord plays it on the big keyboard; playing a chord
+// lights its diagram.
 const CHART_ROOTS = [0, 2, 4, 5, 7, 9, 11];               // C D E F G A B
 const FLATS = { 'D#': 'E♭', 'G#': 'A♭', 'A#': 'B♭' };
 function chordNotes(pc, minor) { return [0, minor ? 3 : 4, 7].map(i => pc + i); }   // semitones above C
 function spell(semi, minor) { const n = NAMES[semi % 12]; return minor && FLATS[n] ? FLATS[n] : n.replace('#', '♯'); }
-function miniKeyboard(lit) {             // lit: semitones above C (0..19) to highlight
-  const whites = [], W = 110, H = 44;
-  for (let s = 0; s <= 19; s++) if (!isBlack(s)) whites.push(s);
+const MINI_SPAN = 24;                    // mini keyboards show C3..C5; middle C (C4) is semitone 12
+function miniKeyboard(lit) {             // lit: semitones above C3 (0..24) to highlight
+  const whites = [], W = 110, H = 40;
+  for (let s = 0; s <= MINI_SPAN; s++) if (!isBlack(s)) whites.push(s);
   const ww = W / whites.length, bw = ww * 0.62;
   let svg = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
   whites.forEach((s, i) => svg += `<rect x="${i * ww + .3}" y=".3" width="${ww - .6}" height="${H - .6}" rx="1.5"
     fill="${lit.includes(s) ? '#4fd1a5' : '#eef0f4'}" stroke="#9ea3ad" stroke-width=".5"/>`);
-  whites.forEach((s, i) => { if (isBlack(s + 1) && s + 1 <= 19) svg += `<rect x="${(i + 1) * ww - bw / 2}" y="0" width="${bw}"
+  whites.forEach((s, i) => { if (isBlack(s + 1) && s + 1 <= MINI_SPAN) svg += `<rect x="${(i + 1) * ww - bw / 2}" y="0" width="${bw}"
     height="${H * .6}" rx="1" fill="${lit.includes(s + 1) ? '#4fd1a5' : '#22252c'}" ${lit.includes(s + 1) ? 'stroke="#0b3d2d" stroke-width=".8"' : ''}/>`; });
+  // Dot on middle C, so it's clear the chord sits to its left (left hand)
+  const mc = whites.indexOf(12);
+  svg += `<circle cx="${(mc + .5) * ww}" cy="${H - 5}" r="1.8" fill="${lit.includes(12) ? '#0b3d2d' : '#e0614f'}"/>`;
   return svg + '</svg>';
 }
 function buildChordChart() {
@@ -1189,9 +1195,9 @@ function buildChordChart() {
     }).join('');
   }
 }
-function playChartChord(pc, minor) {     // always around middle C; the on-screen range stays as it is
-  // C–F chords start on C4–F4; G, A and B start just below middle C (G3, A3, B3)
-  const notes = chordNotes((pc <= 5 ? 60 : 48) + pc, minor);
+function playChartChord(pc, minor) {     // left-hand octave; the on-screen range stays as it is
+  // Every chord's root is in the octave below middle C (C3..B3), matching the diagrams
+  const notes = chordNotes(48 + pc, minor);
   quietStream = true; keepRange = true;
   notes.forEach(n => noteOn(n, 80));
   quietStream = false; keepRange = false;
@@ -1206,6 +1212,34 @@ ctx.addEventListener?.('statechange', updateSoundButton);
 updateSoundButton();
 for (const type of ['pointerdown', 'keydown', 'touchend']) document.addEventListener(type, unlockAudio, { capture: true });
 $('soundOn').addEventListener('click', unlockAudio);
+
+// ---------- Keep the screen on (Screen Wake Lock) ----------
+// The browser drops the lock whenever the tab is hidden or the screen turns off,
+// so it's requested again when the page comes back into view.
+let wakeLock = null, wakePending = false;
+async function updateWakeLock() {
+  const want = $('wake').checked && document.visibilityState === 'visible';
+  if (want && !wakeLock && !wakePending) {
+    wakePending = true;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+      if (!$('wake').checked) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    } catch (e) { wakeLock = null; }            // e.g. battery saver on; retried on the next tap
+    wakePending = false;
+  } else if (!want && wakeLock) {
+    wakeLock.release().catch(() => {}); wakeLock = null;
+  }
+}
+if ('wakeLock' in navigator) {
+  $('wake').checked = recall('wake') !== '0';
+  $('wake').addEventListener('change', () => { store('wake', $('wake').checked ? '1' : '0'); updateWakeLock(); });
+  document.addEventListener('visibilitychange', updateWakeLock);
+  document.addEventListener('pointerdown', updateWakeLock, { capture: true });
+  updateWakeLock();
+} else {
+  $('wakeCtl').classList.add('hidden');         // not supported (or not HTTPS): hide the option
+}
 </script>
 </body>
 </html>
