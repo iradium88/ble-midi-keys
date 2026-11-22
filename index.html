@@ -139,6 +139,21 @@
   #log { font: 11px/1.45 ui-monospace, Consolas, monospace; height: 90px; overflow-y: auto; color: var(--muted);
     white-space: pre; background: var(--bg); border-radius: 8px; padding: 6px 8px; }
   .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-top: 14px; border-bottom: 1px solid var(--line); }
+  .tab { border-radius: 10px 10px 0 0; border-bottom: none; background: transparent; color: var(--muted); min-height: 38px; }
+  .tab.on { background: var(--panel); color: var(--text); border-color: var(--line); font-weight: 600; position: relative; top: 1px; }
+  .tabpane > .card:first-child { margin-top: 10px; }
+  /* Recorder */
+  button.recbtn { color: #ff7b72; font-weight: 600; }
+  button.recbtn.on { background: #d93b3b; color: #fff; border-color: transparent; animation: recpulse 1s ease-in-out infinite; }
+  @keyframes recpulse { 50% { opacity: .65; } }
+  .recinfo { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .roll-wrap { position: relative; height: clamp(260px, 46vh, 520px); overflow: auto; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; outline: none; touch-action: pan-x pan-y; }
+  .roll-wrap:focus-visible { border-color: var(--accent); }
+  #roll { position: sticky; top: 0; left: 0; display: block; touch-action: none; cursor: default; }
+  .roll-space { pointer-events: none; }
   /* Chord chart: small keyboard diagrams */
   details.chords summary { cursor: pointer; margin-bottom: 8px; }
   .chord-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
@@ -215,12 +230,6 @@
     </div>
   </section>
 
-  <details class="card chords" open>
-    <summary class="label">Chords <span class="hint">left hand 5-3-1, below middle C (red dot) · click one to hear it · the chord you play lights up</span></summary>
-    <div class="chord-row"><span class="chord-kind">Major</span><div class="chord-grid" id="majorChords"></div></div>
-    <div class="chord-row"><span class="chord-kind">Minor</span><div class="chord-grid" id="minorChords"></div></div>
-  </details>
-
   <section class="card metro">
     <span class="label" style="margin:0">Metronome</span>
     <button id="metro" class="big sm" aria-label="Start or stop the metronome">▶ Start</button>
@@ -239,6 +248,18 @@
     <div class="beats" id="beatDots" aria-hidden="true"></div>
   </section>
 
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="tabPlay" role="tab">Chords &amp; songs</button>
+    <button class="tab" data-tab="tabRec" role="tab">● Recorder</button>
+  </nav>
+
+  <div id="tabPlay" class="tabpane">
+  <details class="card chords" open>
+    <summary class="label">Chords <span class="hint">left hand 5-3-1, below middle C (red dot) · click one to hear it · the chord you play lights up</span></summary>
+    <div class="chord-row"><span class="chord-kind">Major</span><div class="chord-grid" id="majorChords"></div></div>
+    <div class="chord-row"><span class="chord-kind">Minor</span><div class="chord-grid" id="minorChords"></div></div>
+  </details>
+
   <section class="card">
     <div class="row head">
       <div class="label" style="margin:0">Song <span class="hint">paste notes here and press Play</span></div>
@@ -248,6 +269,7 @@
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
           <option value="1" selected>1×</option><option value="1.5">1.5×</option>
         </select>
+        <label class="ctl" title="Start again from the top when the song ends"><input id="songLoop" type="checkbox"> Loop</label>
         <button id="clearSong" class="sm">Clear</button>
       </div>
     </div>
@@ -268,6 +290,31 @@
     <textarea id="stream" class="notes" wrap="off" spellcheck="false" aria-label="What you played"
       placeholder="Play your keyboard and the notes show up here"></textarea>
   </section>
+  </div>
+
+  <div id="tabRec" class="tabpane hidden">
+  <section class="card rec">
+    <div class="row head">
+      <div class="row">
+        <button id="recBtn" class="sm recbtn" title="Record (R)">● Record</button>
+        <button id="recPlay" class="primary sm" title="Play / stop (Space)">▶ Play</button>
+        <label class="ctl" title="Start again when the recording ends"><input id="recLoop" type="checkbox"> Loop</label>
+        <span id="recInfo" class="recinfo">Nothing recorded yet</span>
+      </div>
+      <div class="row">
+        <label class="ctl" title="Zoom in or out on time">Zoom <input id="recZoom" type="range" min="30" max="500" value="140" aria-label="Zoom"></label>
+        <button id="recUndo" class="sm" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button id="recDel" class="sm" title="Delete the selected notes (Delete)">Delete</button>
+        <button id="recClear" class="sm">Clear</button>
+      </div>
+    </div>
+    <div id="rollWrap" class="roll-wrap" tabindex="0" aria-label="Recorded notes">
+      <canvas id="roll"></canvas>
+      <div id="rollSpace" class="roll-space"></div>
+    </div>
+    <p class="note">Click a note to select it (Shift or Ctrl adds more, or drag a box around several) · drag to move it in time and pitch · drag its right end to make it longer or shorter · double-click empty space to add a note · click the time bar on top to play from there · Delete removes · arrow keys nudge (Shift = bigger steps) · Ctrl+Z undoes.</p>
+  </section>
+  </div>
 
   <details class="card small">
     <summary class="label">MIDI log <span class="hint">velocity <b id="mVel">–</b> · sustain <b id="mSus">off</b> · bend <b id="mPb">0</b> · mod <b id="mMod">0</b> · CC <b id="mCc">–</b></span></summary>
@@ -334,31 +381,46 @@ function dataLen(status) {
   return 0;
 }
 let sysex = null;
-function parseBleMidi(bytes) {
+// Each message carries a 13-bit millisecond timestamp from the keyboard. Notes sent in one
+// packet are spread out by those timestamps (relative to the packet's arrival), so the
+// recorder gets the real gaps between them instead of the Bluetooth connection's ~15 ms steps.
+let midiEventTime = null;              // performance.now()-based time of the message being handled
+function parseBleMidi(bytes, arrival = performance.now()) {
   if (bytes.length < 2 || !(bytes[0] & 0x80)) return;
-  let i = 1, running = 0;
+  const msgs = [];                     // [message, timestamp]
+  let i = 1, running = 0, tsHigh = bytes[0] & 0x3f, tsLow = -1, ts = 0;
+  const emit = m => msgs.push([m, ts]);
   while (i < bytes.length) {
     let b = bytes[i];
     // In-progress sysex continues with raw data bytes
     if (sysex && !(b & 0x80)) { sysex.push(b); i++; continue; }
     if (b & 0x80) {                    // timestamp byte
+      const low = b & 0x7f;
+      if (tsLow >= 0 && low < tsLow) tsHigh = (tsHigh + 1) & 0x3f;   // low part wrapped inside the packet
+      tsLow = low; ts = (tsHigh << 7) | low;
       i++;
       if (i >= bytes.length) break;
       b = bytes[i];
       if (b & 0x80) {                  // status byte
         i++;
         if (b === 0xf0) { sysex = [0xf0]; continue; }
-        if (b === 0xf7) { if (sysex) { sysex.push(0xf7); handleMidi(sysex); sysex = null; } continue; }
-        if (b >= 0xf8) { handleMidi([b]); continue; }   // realtime, keeps running status
+        if (b === 0xf7) { if (sysex) { sysex.push(0xf7); emit(sysex); sysex = null; } continue; }
+        if (b >= 0xf8) { emit([b]); continue; }   // realtime, keeps running status
         running = b;
       }
     }
     if (!running) { i++; continue; }
     const n = dataLen(running);
     if (i + n > bytes.length) break;
-    handleMidi([running, ...bytes.slice(i, i + n)]);
+    emit([running, ...bytes.slice(i, i + n)]);
     i += n;
   }
+  const last = msgs.length ? msgs[msgs.length - 1][1] : 0;
+  for (const [m, t] of msgs) {
+    midiEventTime = arrival - ((last - t + 8192) % 8192);
+    handleMidi(m);
+  }
+  midiEventTime = null;
 }
 
 // ---------- MIDI handling ----------
@@ -382,7 +444,7 @@ function handleMidi(msg) {
   } else if (type === 0xb0) {
     $('mCc').textContent = `${d1} = ${d2}`;
     if (d1 === 1) { $('mMod').textContent = d2; $('bMod').style.width = (d2 / 127 * 100) + '%'; synthMod(d2); }
-    if (d1 === 64) { sustain = d2 >= 64; $('mSus').textContent = sustain ? 'on' : 'off'; if (!sustain && !playPedal) releaseSustained(); }
+    if (d1 === 64) { sustain = d2 >= 64; $('mSus').textContent = sustain ? 'on' : 'off'; recPedal(sustain); if (!sustain && !playPedal) releaseSustained(); }
     if (d1 === 123 || d1 === 120) allOff();
     log(`ch${ch} CC ${d1} = ${d2}`);
   } else if (type === 0xe0) {
@@ -498,8 +560,11 @@ $('kbd').addEventListener('pointerdown', e => {
   if (isNaN(n)) return;
   resumeAudio();
   e.target.setPointerCapture?.(e.pointerId);
-  noteOn(n, 100);
-  const up = () => { noteOff(n); e.target.removeEventListener('pointerup', up); e.target.removeEventListener('pointercancel', up); };
+  midiEventTime = e.timeStamp; noteOn(n, 100); midiEventTime = null;
+  const up = ev => {
+    midiEventTime = ev.timeStamp; noteOff(n); midiEventTime = null;
+    e.target.removeEventListener('pointerup', up); e.target.removeEventListener('pointercancel', up);
+  };
   e.target.addEventListener('pointerup', up);
   e.target.addEventListener('pointercancel', up);
 });
@@ -606,7 +671,7 @@ function nearestSample(n) {
   for (const s of piano.keys()) { const d = Math.abs(s - n); if (d < dist) { dist = d; best = s; } }
   return best;
 }
-function pianoVoice(n, vel) {
+function pianoVoice(n, vel, when = 0) {   // when: audio-clock start time (0 = now)
   const s = nearestSample(n);
   const src = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
   src.buffer = pianoLayers.get(layerFor(vel))?.get(s) || piano.get(s);
@@ -618,7 +683,7 @@ function pianoVoice(n, vel) {
   filter.frequency.value = 1500 + v * v * 16000;  // gentle: the velocity layers already carry the tone
   gain.gain.value = (0.3 + 0.7 * v) * 0.9 / pianoPeak.get(s);   // all layers share the medium layer's level, so soft stays soft
   src.connect(filter).connect(gain).connect(master);
-  src.start();
+  src.start(when);
   return { osc: src, gain };
 }
 
@@ -867,9 +932,14 @@ function playStream() {
     }
   }, Math.max(0, ev.at / speed + jitter(8)))));
   const end = events[events.length - 1].at / speed + (playPedal || events.some(e => e.ped === 'change') ? 2500 : 900);
-  playTimers.push(setTimeout(stopPlayback, end));
+  playTimers.push(setTimeout(() => {
+    stopPlayback();
+    if ($('songLoop').checked) playStream();     // loop: read the box again (edits count) and start over
+  }, end));
 }
 $('playStream').addEventListener('click', playStream);
+$('songLoop').checked = recall('songLoop') === '1';
+$('songLoop').addEventListener('change', () => store('songLoop', $('songLoop').checked ? '1' : '0'));
 
 // ---------- "Now playing": every held note, plus the chord name ----------
 const CHORDS = [   // intervals above the root -> name suffix
@@ -907,6 +977,7 @@ function showHeld() {
 function noteOn(n, vel) {
   held.add(n); down.add(n);
   streamNote(n);
+  recOn(n, vel);
   ensureVisible(n);
   const k = keyEl(n);
   if (k) { k.classList.add('down'); k.style.setProperty('--v', (vel / 127).toFixed(2)); }   // key color shows how hard it was hit
@@ -938,6 +1009,7 @@ function noteOn(n, vel) {
 }
 function noteOff(n) {
   held.delete(n); down.delete(n);
+  recOff(n);
   keyEl(n)?.classList.remove('down');
   showHeld();
   if (!sustain && !playPedal) stopVoice(n, releaseTime());
@@ -980,7 +1052,7 @@ $('fixedVel').addEventListener('change', () => store('fixedVel', $('fixedVel').c
 // ---------- Metronome ----------
 // Clicks are scheduled on the audio clock a little ahead of time, so they stay steady
 // even when the page is busy. Beat 1 of each bar gets a higher, louder click.
-let metroOn = false, metroTimer = null, nextClick = 0, beatIdx = 0, tapTimes = [];
+let metroOn = false, metroTimer = null, nextClick = 0, beatIdx = 0, tapTimes = [], metroDownbeat = null;
 const bpm = () => Math.max(30, Math.min(240, Math.round(+$('bpm').value) || 80));
 const beatsPerBar = () => +$('beatsPerBar').value;
 function setBpm(v) {
@@ -1008,6 +1080,7 @@ function metroClick(t, accent) {
 function metroTick() {
   while (nextClick < ctx.currentTime + 0.12) {
     const n = beatsPerBar(), b = beatIdx % n;
+    if (b === 0) metroDownbeat = nextClick;           // the recorder lines its bars up with this
     metroClick(nextClick, n > 1 && b === 0);
     setTimeout(() => { if (metroOn) drawBeatDots(b); }, Math.max(0, (nextClick - ctx.currentTime) * 1000));
     nextClick += 60 / bpm();
@@ -1030,7 +1103,9 @@ $('metro').addEventListener('click', toggleMetro);
 $('bpmDown').addEventListener('click', () => setBpm(bpm() - 1));
 $('bpmUp').addEventListener('click', () => setBpm(bpm() + 1));
 $('bpm').addEventListener('change', () => setBpm(bpm()));
-$('beatsPerBar').addEventListener('change', () => { store('beats', beatsPerBar()); beatIdx = 0; drawBeatDots(); });
+$('beatsPerBar').addEventListener('change', () => { store('beats', beatsPerBar()); beatIdx = 0; drawBeatDots(); queueRoll(); });
+$('bpm').addEventListener('input', () => queueRoll());
+for (const id of ['bpmDown', 'bpmUp', 'tap']) $(id).addEventListener('click', () => queueRoll());
 $('metroVol').addEventListener('input', () => store('metroVol', $('metroVol').value));
 // Tap: the average of the last few taps sets the tempo
 $('tap').addEventListener('click', () => {
@@ -1069,7 +1144,7 @@ async function openGatt() {
   const service = await server.getPrimaryService(MIDI_SERVICE);
   characteristic = await service.getCharacteristic(MIDI_CHAR);
   characteristic.addEventListener('characteristicvaluechanged', e => {
-    parseBleMidi(new Uint8Array(e.target.value.buffer));
+    parseBleMidi(new Uint8Array(e.target.value.buffer), performance.now());
   });
   await characteristic.startNotifications();
   setStatus(`${device.name || 'BLE MIDI device'} ✓`, 'on');
@@ -1108,7 +1183,11 @@ function refreshUsbInputs() {
   let added = false;
   for (const input of midiAccess.inputs.values()) {
     if (input.state !== 'connected') continue;
-    input.onmidimessage = e => handleMidi(Array.from(e.data));
+    input.onmidimessage = e => {        // e.timeStamp is when the message arrived, before any page lag
+      midiEventTime = e.timeStamp || performance.now();
+      handleMidi(Array.from(e.data));
+      midiEventTime = null;
+    };
     names.push(input.name);
     now.add(input.id);
     if (!usbConnected.has(input.id)) added = true;
@@ -1212,6 +1291,447 @@ ctx.addEventListener?.('statechange', updateSoundButton);
 updateSoundButton();
 for (const type of ['pointerdown', 'keydown', 'touchend']) document.addEventListener(type, unlockAudio, { capture: true });
 $('soundOn').addEventListener('click', unlockAudio);
+
+// ---------- Tabs ----------
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+  document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('hidden', p.id !== id));
+  store('tab', id);
+  if (id === 'tabRec') drawRoll();
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ---------- Recorder ----------
+// Each note is { n, v, t, d }: MIDI note, velocity, start and length in milliseconds.
+// Times come from the input's own timestamps (USB messages, Bluetooth packet timestamps,
+// touch events), not from when the page got around to handling them. Playback is
+// scheduled ahead on the audio clock, so notes start on the exact millisecond.
+const ROW = 14, RULER = 22, GUT = 46;           // piano roll: row height, time bar, note-name gutter
+let recNotes = [], recSel = new Set(), recUndo = [], recHead = 0;
+const rec = { on: false, t0: null, open: new Map(), pedalHeld: new Set(), prev: null };
+const recPlay = { on: false, from: 0, loopFrom: 0, startCtx: 0, end: 0, list: [], idx: 0, timer: null, voices: new Set(), vis: [] };
+const evTime = () => midiEventTime ?? performance.now();
+const noteEnd = x => x.t + x.d;
+
+try { const a = JSON.parse(recall('recNotes') || '[]'); if (Array.isArray(a)) recNotes = a.filter(x => Number.isFinite(x?.t) && Number.isFinite(x?.d)); } catch (e) {}
+// Bars and beats: the grid uses the metronome's tempo and time signature. barOffset is where
+// bar 1 starts (ms, at or before the first note): 0 means "bar 1 starts on the first note";
+// a recording made with the metronome on gets the offset that lines up with its clicks.
+let barOffset = +(recall('recBarOffset') || 0) || 0;
+const beatMs = () => 60000 / bpm();
+const barBeats = () => beatsPerBar() < 2 ? 4 : beatsPerBar();   // "no accent" still groups in 4s
+function recAlignToMetronome(firstNoteAt) {
+  barOffset = 0;
+  if (metroOn && metroDownbeat !== null) {
+    // When the downbeat was actually heard: audio-clock time -> page time, plus the output delay
+    const heard = performance.now() + (metroDownbeat - ctx.currentTime + (ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000;
+    const bar = beatMs() * barBeats();
+    barOffset = ((heard - firstNoteAt) % bar + bar) % bar;
+    if (barOffset > 1) barOffset -= bar;                 // bar 1 starts at or just before the first note
+  }
+  store('recBarOffset', barOffset);
+}
+function msToBeat(ms) {                                  // "bar.beat" for the info line
+  const b = (ms - barOffset) / beatMs() + 0.02, B = barBeats();   // a few ms early still counts as on the beat
+  return `${Math.floor(b / B) + 1}.${Math.floor(((b % B) + B) % B) + 1}`;
+}
+function recSnapshot() { recUndo.push(JSON.stringify(recNotes)); if (recUndo.length > 100) recUndo.shift(); }
+function recChanged() {
+  recNotes.sort((a, b) => a.t - b.t);
+  store('recNotes', JSON.stringify(recNotes.map(({ n, v, t, d }) => ({ n, v, t: Math.round(t * 10) / 10, d: Math.round(d * 10) / 10 }))));
+  recShowInfo(); drawRoll();
+}
+function recShowInfo() {
+  const end = recNotes.reduce((m, x) => Math.max(m, noteEnd(x)), 0);
+  $('recInfo').textContent = rec.on ? (rec.t0 === null ? 'Recording… play something' : `Recording… ${recNotes.length} notes`)
+    : recNotes.length ? `${recNotes.length} notes · ${Math.ceil((end - barOffset) / (beatMs() * barBeats()))} bars at ${bpm()} BPM`
+        + (recSel.size ? ` · ${recSel.size} selected, starts at ${msToBeat(Math.min(...[...recSel].map(x => x.t)))}` : '')
+    : 'Nothing recorded yet';
+}
+
+// --- Recording ---
+function recOn(n, vel) {
+  if (!rec.on || playingBack || quietStream) return;   // never record Song playback or Match key presses
+  const at = evTime();
+  if (rec.t0 === null) { rec.t0 = at; recAlignToMetronome(at); }   // time zero = the first note
+  if (rec.open.has(n)) recOff(n);
+  const x = { n, v: vel, t: at - rec.t0, d: 0 };
+  recNotes.push(x); rec.open.set(n, x);
+  recShowInfo();
+}
+function recOff(n) {
+  const x = rec.open.get(n);
+  if (!x) return;
+  rec.open.delete(n);
+  x.d = Math.max(15, evTime() - rec.t0 - x.t);
+  if (sustain) rec.pedalHeld.add(x);                    // still sounding: the pedal decides how long
+}
+function recPedal(on) {
+  if (on || !rec.on || rec.t0 === null) return;
+  const at = evTime() - rec.t0;
+  rec.pedalHeld.forEach(x => { x.d = Math.max(x.d, at - x.t); });
+  rec.pedalHeld.clear();
+}
+function recStart() {
+  recPlayStop();
+  resumeAudio();
+  recSnapshot();
+  rec.prev = recNotes; recNotes = []; recSel.clear();
+  Object.assign(rec, { on: true, t0: null }); rec.open.clear(); rec.pedalHeld.clear();
+  recHead = 0;
+  $('recBtn').classList.add('on'); $('recBtn').textContent = '■ Stop recording';
+  recShowInfo(); requestAnimationFrame(recAnim);
+}
+function recFinish() {
+  if (!rec.on) return;
+  const at = performance.now() - (rec.t0 ?? 0);
+  rec.open.forEach(x => { x.d = Math.max(15, at - x.t); });
+  rec.pedalHeld.forEach(x => { x.d = Math.max(x.d, at - x.t); });
+  rec.open.clear(); rec.pedalHeld.clear();
+  rec.on = false;
+  if (!recNotes.length) { recNotes = rec.prev; recUndo.pop(); }   // nothing played: keep the old recording
+  $('recBtn').classList.remove('on'); $('recBtn').textContent = '● Record';
+  recChanged();
+}
+
+// --- Playback (scheduled on the audio clock) ---
+function scheduledVoice(n, vel, when, dur) {
+  const wave = $('wave').value;
+  if (wave === 'off') return null;
+  if ($('fixedVel').checked) vel = FIXED_VELOCITY;
+  let v;
+  if (wave === 'piano' && pianoState === 'ready') v = pianoVoice(n, vel, when);
+  else {
+    const osc = ctx.createOscillator(), gain = ctx.createGain(), peak = (vel / 127) ** 1.5;
+    osc.type = wave === 'piano' ? 'triangle' : wave; osc.frequency.value = freq(n);
+    gain.gain.setValueAtTime(0, when); gain.gain.linearRampToValueAtTime(peak, when + 0.008);
+    if (dur > 0.45) gain.gain.exponentialRampToValueAtTime(Math.max(peak * 0.6, 0.0001), when + 0.4);
+    osc.connect(gain).connect(master); osc.start(when);
+    v = { osc, gain };
+  }
+  const off = when + dur, rel = releaseTime();
+  v.gain.gain.setTargetAtTime(0, off, rel / 4);          // let go like a key release
+  v.osc.stop(off + rel * 2);
+  v.osc.onended = () => { recPlay.voices.delete(v); try { lfoGain.disconnect(v.osc.detune); } catch (e) {} };
+  return v;
+}
+function flashKey(n, vel, on) {
+  const k = keyEl(n);
+  if (!k) return;
+  k.classList.toggle('down', on);
+  if (on) k.style.setProperty('--v', (vel / 127).toFixed(2));
+}
+function scheduleRecNote(x, when) {
+  const v = scheduledVoice(x.n, x.v, when, x.d / 1000);
+  if (v) recPlay.voices.add(v);
+  const ms = Math.max(0, (when - ctx.currentTime) * 1000);
+  recPlay.vis.push(setTimeout(() => flashKey(x.n, x.v, true), ms), setTimeout(() => flashKey(x.n, x.v, false), ms + x.d));
+}
+function previewNote(n, v = 90) {                       // short sound when you pick or drag a note
+  resumeAudio();
+  if (!ctx) return;
+  scheduledVoice(n, v, ctx.currentTime, 0.25);
+  flashKey(n, v, true); setTimeout(() => flashKey(n, v, false), 250);
+}
+function recLoadList() {
+  recPlay.list = recNotes.filter(x => x.t >= recPlay.from).sort((a, b) => a.t - b.t);
+  recPlay.end = recNotes.reduce((m, x) => Math.max(m, noteEnd(x)), 0);
+  recPlay.idx = 0;
+}
+function recPlayStart(from = recHead) {
+  if (rec.on) recFinish();
+  if (!recNotes.length) return;
+  resumeAudio(); unlockAudio();
+  recPlayStop();
+  const end = recNotes.reduce((m, x) => Math.max(m, noteEnd(x)), 0);
+  if (from >= end - 1) from = 0;
+  Object.assign(recPlay, { on: true, from, loopFrom: from, startCtx: ctx.currentTime + 0.08 });
+  recLoadList();
+  recPlay.timer = setInterval(recTick, 25); recTick();
+  $('recPlay').textContent = '■ Stop';
+  requestAnimationFrame(recAnim);
+}
+function recTick() {
+  const now = ctx.currentTime, horizon = now + 0.2;
+  for (;;) {
+    while (recPlay.idx < recPlay.list.length) {
+      const x = recPlay.list[recPlay.idx], when = recPlay.startCtx + (x.t - recPlay.from) / 1000;
+      if (when > horizon) return;
+      if (when >= now - 0.05) scheduleRecNote(x, Math.max(when, now));
+      recPlay.idx++;
+    }
+    const endAt = recPlay.startCtx + (recPlay.end - recPlay.from) / 1000;
+    if (horizon < endAt) return;
+    if (!$('recLoop').checked) { if (now >= endAt) recPlayStop(); return; }
+    // Loop: the next round starts the moment this one ends (edits made meanwhile are included)
+    recPlay.startCtx = endAt; recPlay.from = recPlay.loopFrom;
+    recLoadList();
+    if (!recPlay.list.length || recPlay.end - recPlay.from < 20) { recPlayStop(); return; }
+  }
+}
+function recPlayStop() {
+  if (!recPlay.on) return;
+  clearInterval(recPlay.timer); recPlay.on = false;
+  recPlay.vis.forEach(clearTimeout); recPlay.vis = [];
+  const now = ctx.currentTime;
+  recPlay.voices.forEach(v => {
+    try { v.gain.gain.cancelScheduledValues(now); v.gain.gain.setTargetAtTime(0, now, 0.03); v.osc.stop(now + 0.2); } catch (e) {}
+  });
+  recPlay.voices.clear();
+  recNotes.forEach(x => flashKey(x.n, 0, false));
+  recHead = recPlay.loopFrom;                            // back to where Play started
+  $('recPlay').textContent = '▶ Play';
+  drawRoll();
+}
+function playheadMs() {
+  if (recPlay.on) {
+    const span = recPlay.end - recPlay.from;
+    let t = (ctx.currentTime - recPlay.startCtx) * 1000;
+    return recPlay.from + Math.max(0, Math.min(t, span));
+  }
+  if (rec.on) return rec.t0 === null ? 0 : performance.now() - rec.t0;
+  return recHead;
+}
+function recAnim() {
+  if (!recPlay.on && !rec.on) return;
+  const wrap = $('rollWrap');
+  if (wrap.offsetParent) {                               // keep the playhead in view
+    const x = GUT + (playheadMs() - viewT0()) / 1000 * pps();
+    if (x > wrap.scrollLeft + wrap.clientWidth - 40 || x < wrap.scrollLeft + GUT) wrap.scrollLeft = Math.max(0, x - GUT - 60);
+    drawRoll();
+  }
+  requestAnimationFrame(recAnim);
+}
+
+// --- Piano roll drawing ---
+let rollLo = 48, rollHi = 72, band = null, rollQueued = false;
+const pps = () => +$('recZoom').value;                  // pixels per second
+const viewT0 = () => Math.min(0, barOffset);            // the roll starts at bar 1, even if that's before the first note
+function rollRange() {
+  let lo = baseNote, hi = baseNote + KEYS - 1;
+  for (const x of recNotes) { lo = Math.min(lo, x.n - 2); hi = Math.max(hi, x.n + 2); }
+  rollLo = Math.max(0, lo); rollHi = Math.min(127, hi);
+}
+function liveLen(x) { return rec.on && rec.open.get(x.n) === x ? Math.max(15, performance.now() - rec.t0 - x.t) : x.d; }
+function drawRoll() {
+  const wrap = $('rollWrap'), cv = $('roll');
+  if (!wrap.offsetParent) return;                       // tab hidden
+  rollRange();
+  const vw = wrap.clientWidth, vh = wrap.clientHeight, dpr = devicePixelRatio || 1, P = pps();
+  const endMs = Math.max(recNotes.reduce((m, x) => Math.max(m, x.t + liveLen(x)), 0), playheadMs(), recHead) + 3000;
+  const sp = $('rollSpace');
+  sp.style.width = Math.max(vw, GUT + (endMs - viewT0()) / 1000 * P) + 'px';
+  sp.style.height = Math.max(vh, RULER + (rollHi - rollLo + 1) * ROW) + 'px';
+  sp.style.marginTop = -vh + 'px';
+  if (cv.width !== Math.round(vw * dpr) || cv.height !== Math.round(vh * dpr)) {
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
+  }
+  const g = cv.getContext('2d'), sx = wrap.scrollLeft, sy = wrap.scrollTop;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#0e1015'; g.fillRect(0, 0, vw, vh);
+  const T0 = viewT0(), rowY = n => RULER + (rollHi - n) * ROW - sy, timeX = ms => GUT + (ms - T0) / 1000 * P - sx;
+  for (let n = rollHi; n >= rollLo; n--) {               // lanes: black-key rows darker, a line under each C
+    const y = rowY(n);
+    if (y + ROW < RULER || y > vh) continue;
+    g.fillStyle = isBlack(n) ? '#111318' : '#161920'; g.fillRect(GUT, y, vw, ROW);
+    if (n % 12 === 0) { g.fillStyle = '#2c3240'; g.fillRect(GUT, y + ROW - 1, vw, 1); }
+  }
+  // Beat grid: bar lines strong, beats medium, and halves/quarters of a beat when zoomed in
+  const bm = beatMs(), B = barBeats(), beatPx = bm / 1000 * P;
+  const sub = beatPx >= 120 ? 4 : beatPx >= 60 ? 2 : 1, stepMs = bm / sub, perBar = sub * B;
+  const lines = [];
+  for (let k = Math.floor((sx / P * 1000 + T0 - barOffset) / stepMs); ; k++) {
+    const ms = barOffset + k * stepMs, x = timeX(ms);
+    if (x > vw) break;
+    if (x < GUT) continue;
+    const kind = ((k % perBar) + perBar) % perBar === 0 ? 'bar' : k % sub === 0 ? 'beat' : 'sub';
+    lines.push({ x, k, kind });
+    g.fillStyle = kind === 'bar' ? '#3a4150' : kind === 'beat' ? '#232833' : '#1a1d24';
+    g.fillRect(Math.round(x), RULER, 1, vh);
+  }
+  g.font = '10px system-ui, sans-serif'; g.textBaseline = 'middle';
+  for (const x of recNotes) {                            // the notes
+    const X = timeX(x.t), W = Math.max(3, liveLen(x) / 1000 * P), Y = rowY(x.n);
+    if (X + W < GUT || X > vw || Y + ROW < RULER || Y > vh) continue;
+    const sel = recSel.has(x);
+    g.fillStyle = sel ? '#f0b429' : `hsl(158 55% ${26 + x.v / 127 * 34}%)`;   // brighter = played harder
+    g.fillRect(X, Y + 1, W, ROW - 2);
+    g.fillStyle = sel ? '#ffe39a' : '#9ff0d0'; g.fillRect(X, Y + 1, 2, ROW - 2);
+    if (W > 30) { g.fillStyle = sel ? '#2b1d00' : '#04140e'; g.fillText(noteName(x.n), X + 5, Y + ROW / 2); }
+  }
+  if (band) {                                           // selection box
+    const x0 = timeX(Math.min(band.t0, band.t1)), x1 = timeX(Math.max(band.t0, band.t1));
+    const y0 = rowY(Math.max(band.n0, band.n1)), y1 = rowY(Math.min(band.n0, band.n1)) + ROW;
+    g.fillStyle = '#f0b42922'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.strokeStyle = '#f0b429'; g.strokeRect(x0 + .5, y0 + .5, x1 - x0, y1 - y0);
+  }
+  g.fillStyle = '#171a21'; g.fillRect(0, RULER, GUT, vh);   // note names on the left
+  for (let n = rollHi; n >= rollLo; n--) {
+    const y = rowY(n);
+    if (y + ROW < RULER || y > vh) continue;
+    if (isBlack(n)) { g.fillStyle = '#22252c'; g.fillRect(0, y, GUT * .6, ROW); }
+    g.fillStyle = n % 12 === 0 ? '#e8eaf0' : '#7d8392';
+    g.fillText(noteName(n), isBlack(n) ? GUT * .62 : 6, y + ROW / 2);
+  }
+  g.fillStyle = '#1d2129'; g.fillRect(0, 0, vw, RULER);    // time bar: bar numbers, beat numbers
+  for (const { x, k, kind } of lines) {
+    if (kind === 'sub') { g.fillStyle = '#4a5060'; g.fillRect(Math.round(x), RULER - 3, 1, 3); continue; }
+    const bar = Math.floor(k / perBar) + 1, beat = (((k / sub) % B) + B) % B + 1;
+    if (kind === 'bar') {
+      g.fillStyle = '#c9ced8'; g.fillRect(Math.round(x), 2, 1, RULER - 2);
+      g.font = '600 11px system-ui, sans-serif'; g.fillText(String(bar), x + 4, 10);
+    } else {
+      g.fillStyle = '#5f6574'; g.fillRect(Math.round(x), RULER - 7, 1, 7);
+      if (beatPx >= 26) { g.font = '10px system-ui, sans-serif'; g.fillText(String(beat), x + 3, 13); }
+    }
+  }
+  g.font = '10px system-ui, sans-serif';
+  g.fillStyle = '#8b91a0'; g.fillText('bar', 6, 11);
+  const hx = timeX(playheadMs());                        // playhead
+  if (hx >= GUT) {
+    g.fillStyle = rec.on ? '#ef5b5b' : recPlay.on ? '#4fd1a5' : '#f0b429';
+    g.fillRect(hx - 1, 0, 2, vh);
+    g.beginPath(); g.moveTo(hx - 6, 0); g.lineTo(hx + 6, 0); g.lineTo(hx, 8); g.fill();
+  }
+}
+function queueRoll() { if (!rollQueued) { rollQueued = true; requestAnimationFrame(() => { rollQueued = false; drawRoll(); }); } }
+
+// --- Editing ---
+let drag = null;
+function rollPoint(e) {
+  const r = $('roll').getBoundingClientRect(), wrap = $('rollWrap');
+  const vx = e.clientX - r.left, vy = e.clientY - r.top;
+  return { vx, vy, ms: Math.max(0, (vx - GUT + wrap.scrollLeft) / pps() * 1000 + viewT0()),
+           n: rollHi - Math.floor((vy - RULER + wrap.scrollTop) / ROW) };
+}
+function hitNote(p) {
+  const wrap = $('rollWrap'), P = pps();
+  for (let i = recNotes.length - 1; i >= 0; i--) {
+    const x = recNotes[i];
+    if (x.n !== p.n) continue;
+    const X = GUT + (x.t - viewT0()) / 1000 * P - wrap.scrollLeft, W = Math.max(3, x.d / 1000 * P);
+    if (p.vx >= X - 2 && p.vx <= X + W + 2) return { x, edge: W > 10 && p.vx > X + W - 7 };
+  }
+  return null;
+}
+$('roll').addEventListener('pointerdown', e => {
+  if (rec.on) return;
+  const wrap = $('rollWrap'), p = rollPoint(e);
+  wrap.focus({ preventScroll: true });
+  $('roll').setPointerCapture(e.pointerId);
+  const add = e.shiftKey || e.ctrlKey || e.metaKey;
+  if (p.vy < RULER) {                                    // time bar: move the playhead (and play from there if playing)
+    recHead = p.ms; drag = { mode: 'head' };
+    if (recPlay.on) recPlayStart(recHead);
+    drawRoll(); return;
+  }
+  if (p.vx < GUT) { if (p.n >= rollLo && p.n <= rollHi) previewNote(p.n); return; }
+  const hit = hitNote(p);
+  if (hit) {
+    if (add && recSel.has(hit.x)) { recSel.delete(hit.x); recShowInfo(); drawRoll(); return; }
+    if (!recSel.has(hit.x)) { if (!add) recSel.clear(); recSel.add(hit.x); }
+    previewNote(hit.x.n, hit.x.v);
+    drag = { mode: hit.edge ? 'resize' : 'move', p, snap: JSON.stringify(recNotes), moved: false, lastDn: 0, grab: hit.x,
+             orig: new Map([...recSel].map(x => [x, { t: x.t, n: x.n, d: x.d }])) };
+  } else if (e.pointerType === 'touch') {               // finger on empty space: scroll the roll
+    drag = { mode: 'pan', p, sl: wrap.scrollLeft, st: wrap.scrollTop, moved: false };
+  } else {                                              // mouse on empty space: draw a selection box
+    if (!add) recSel.clear();
+    drag = { mode: 'band', p, keep: new Set(recSel), moved: false };
+    band = { t0: p.ms, t1: p.ms, n0: p.n, n1: p.n };
+  }
+  recShowInfo(); drawRoll();
+});
+$('roll').addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = rollPoint(e), wrap = $('rollWrap');
+  const dx = p.vx - (drag.p?.vx ?? p.vx), dy = p.vy - (drag.p?.vy ?? p.vy);
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+  if (drag.mode === 'head') recHead = p.ms;
+  else if (drag.mode === 'pan') { wrap.scrollLeft = drag.sl - dx; wrap.scrollTop = drag.st - dy; }
+  else if (drag.mode === 'band') {
+    band.t1 = p.ms; band.n1 = p.n;
+    const [t0, t1] = [Math.min(band.t0, band.t1), Math.max(band.t0, band.t1)];
+    const [n0, n1] = [Math.min(band.n0, band.n1), Math.max(band.n0, band.n1)];
+    recSel = new Set([...drag.keep, ...recNotes.filter(x => x.n >= n0 && x.n <= n1 && x.t <= t1 && noteEnd(x) >= t0)]);
+    recShowInfo();
+  } else if (drag.moved) {
+    const dms = dx / pps() * 1000;
+    if (drag.mode === 'move') {
+      const minT = Math.min(...[...drag.orig.values()].map(o => o.t));
+      const dt = Math.max(dms, -minT), dn = -Math.round(dy / ROW);
+      drag.orig.forEach((o, x) => { x.t = o.t + dt; x.n = Math.max(0, Math.min(127, o.n + dn)); });
+      if (dn !== drag.lastDn) { drag.lastDn = dn; previewNote(drag.grab.n, drag.grab.v); }
+    } else drag.orig.forEach((o, x) => { x.d = Math.max(20, o.d + dms); });
+  }
+  queueRoll();
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null; band = null;
+  if ((d.mode === 'move' || d.mode === 'resize') && d.moved) { recUndo.push(d.snap); recChanged(); return; }
+  if ((d.mode === 'band' || d.mode === 'pan') && !d.moved) {   // a plain click on empty space: move the playhead there
+    recHead = rollPoint(e).ms;
+    if (d.mode === 'pan') recSel.clear();
+  }
+  recShowInfo(); drawRoll();
+}
+$('roll').addEventListener('pointerup', endDrag);
+$('roll').addEventListener('pointercancel', endDrag);
+$('roll').addEventListener('dblclick', e => {           // add a note
+  const p = rollPoint(e);
+  if (rec.on || p.vy < RULER || p.vx < GUT || hitNote(p) || p.n < 0 || p.n > 127) return;
+  recSnapshot();
+  const x = { n: p.n, v: 90, t: p.ms, d: 250 };
+  recNotes.push(x); recSel = new Set([x]);
+  previewNote(x.n, x.v); recChanged();
+});
+function recDeleteSel() {
+  if (!recSel.size) return;
+  recSnapshot();
+  recNotes = recNotes.filter(x => !recSel.has(x)); recSel.clear(); recChanged();
+}
+function recUndoLast() {
+  if (!recUndo.length) return;
+  recNotes = JSON.parse(recUndo.pop()); recSel.clear(); recChanged();
+}
+$('rollWrap').addEventListener('keydown', e => {
+  const k = e.key, mod = e.ctrlKey || e.metaKey;
+  if (k === 'Delete' || k === 'Backspace') recDeleteSel();
+  else if (mod && k.toLowerCase() === 'z') recUndoLast();
+  else if (mod && k.toLowerCase() === 'a') { recSel = new Set(recNotes); recShowInfo(); drawRoll(); }
+  else if (k === ' ') recPlay.on ? recPlayStop() : recPlayStart();
+  else if (k === 'Escape') { recSel.clear(); recShowInfo(); drawRoll(); }
+  else if (k.startsWith('Arrow') && recSel.size) {      // nudge: ←→ 10 ms (Shift 100 ms), ↑↓ a semitone (Shift an octave)
+    recSnapshot();
+    const dt = k === 'ArrowLeft' ? -(e.shiftKey ? 100 : 10) : k === 'ArrowRight' ? (e.shiftKey ? 100 : 10) : 0;
+    const dn = k === 'ArrowUp' ? (e.shiftKey ? 12 : 1) : k === 'ArrowDown' ? -(e.shiftKey ? 12 : 1) : 0;
+    recSel.forEach(x => { x.t = Math.max(0, x.t + dt); x.n = Math.max(0, Math.min(127, x.n + dn)); });
+    if (dn) { const x = [...recSel][0]; previewNote(x.n, x.v); }
+    recChanged();
+  } else return;
+  e.preventDefault();
+});
+$('rollWrap').addEventListener('scroll', queueRoll);
+window.addEventListener('resize', queueRoll);
+$('recZoom').addEventListener('input', () => {          // zoom around the playhead
+  const wrap = $('rollWrap'), x = GUT + (playheadMs() - viewT0()) / 1000 * pps();
+  store('recZoom', $('recZoom').value);
+  drawRoll(); wrap.scrollLeft = Math.max(0, x - wrap.clientWidth / 2); drawRoll();
+});
+$('recBtn').addEventListener('click', () => rec.on ? recFinish() : recStart());
+$('recPlay').addEventListener('click', () => recPlay.on ? recPlayStop() : recPlayStart());
+$('recUndo').addEventListener('click', recUndoLast);
+$('recDel').addEventListener('click', recDeleteSel);
+$('recClear').addEventListener('click', () => {
+  if (!recNotes.length) return;
+  recPlayStop(); recSnapshot(); recNotes = []; recSel.clear(); recHead = 0; barOffset = 0; store('recBarOffset', 0); recChanged();
+});
+$('recLoop').checked = recall('recLoop') === '1';
+$('recLoop').addEventListener('change', () => store('recLoop', $('recLoop').checked ? '1' : '0'));
+if (recall('recZoom')) $('recZoom').value = recall('recZoom');
+recShowInfo();
+if (recall('tab') === 'tabRec') showTab('tabRec');
 
 // ---------- Keep the screen on (Screen Wake Lock) ----------
 // The browser drops the lock whenever the tab is hidden or the screen turns off,
